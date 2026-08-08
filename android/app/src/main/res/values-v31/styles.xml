@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ (API 31+) kendi SplashScreen API'sini kullanır —
+  windowSplashScreenBackground/AnimatedIcon tanımlanmazsa sistem,
+  launch_background'u yok sayıp launcher ikonundan kendi başına bir splash
+  üretir. Burada aynı zemin + işareti (bkz. drawable/splash_mark.xml)
+  açıkça veriyoruz ki iki mekanizma (v21 layer-list ve v31 SplashScreen
+  API) tutarlı görünsün. Ortak windowBackground/parent'ı values/styles.xml
+  ile aynı tutmak için tekrar tanımlanıyor — v31 stili aynı isimdeki
+  niteleyicisiz stilden miras alamıyor (kendine referans döngüsü).
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:colorBackground">#F7F7F8</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">#F7F7F8</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_mark</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:colorBackground">#F7F7F8</item>
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android'in domain-config'i sadece tam hostname/subdomain eşleştirir, CIDR
+  aralığı (ör. 192.168.0.0/16) ifade edemez — bu yüzden "sadece özel ağlara
+  izin ver" native olarak kurulamıyor. MTools bilinçli olarak sadece kendi
+  yönettiğiniz sunuculara (Proxmox/AdGuard Home/NUT) LAN üzerinden bağlanır;
+  cleartext burada genel olarak açılıyor, IP kısıtlaması uygulama tarafında
+  değerlendirilebilir bir sonraki adım olarak not edildi (bkz. rapor).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

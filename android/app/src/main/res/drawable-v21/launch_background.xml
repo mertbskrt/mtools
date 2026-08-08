@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Zemin ?android:colorBackground üzerinden temaya göre çözülür (bkz.
+  values/styles.xml ve values-night/styles.xml — LaunchTheme'in
+  android:colorBackground'ı açık/koyu için ayrı tanımlı). İşaret
+  @drawable/splash_mark de gece niteleyicisiyle (drawable-night/) otomatik
+  doğru tonu (koyu/açık mürekkep) seçiyor.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="?android:colorBackground" />
+    <item
+        android:width="192dp"
+        android:height="192dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_mark" />
+</layer-list>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Koyu tema (sistem karanlık modu) için native splash işareti — aynı
+  geometri, açık ton (#EDEDED). Flutter tarafının koyu temadaki
+  textPrimary'siyle (app_theme.dart, isDark:true/classic-OLED) aynı.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <path
+        android:pathData="M205,740 L205,362 L402,622 L512,284 L622,622 L740,386"
+        android:strokeColor="#EDEDED"
+        android:strokeWidth="66"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M760,291 a51,51 0 1,0 102,0 a51,51 0 1,0 -102,0"
+        android:fillColor="#EDEDED" />
+</vector>

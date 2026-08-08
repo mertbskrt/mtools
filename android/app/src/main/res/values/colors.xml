@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MTools uygulamasının varsayılan (Klasik/koyu) temasıyla eşleşen
+         renkler — widget'lar native Android tarafında çizildiği için
+         Flutter'ın kendi tema sistemine erişemiyor, bu yüzden burada sabit
+         olarak tanımlanıyor. -->
+    <color name="widget_bg">#1A1A1A</color>
+    <color name="widget_bg_light">#222222</color>
+    <color name="widget_text_primary">#E2E8F0</color>
+    <color name="widget_text_secondary">#94A3B8</color>
+    <color name="widget_text_muted">#6B7280</color>
+    <color name="widget_primary">#4A9EFF</color>
+    <color name="widget_success">#3DB885</color>
+    <color name="widget_warning">#D4893A</color>
+    <color name="widget_error">#D95C5C</color>
+	<color name="ic_launcher_background">#FFFFFF</color>
+</resources>

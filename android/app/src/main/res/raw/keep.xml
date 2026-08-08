@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ic_notification sadece Dart tarafında string olarak ('@drawable/ic_notification')
+  referans alınıyor — statik bir Android XML/kod referansı yok. shrinkResources
+  bu yüzden onu kullanılmıyor sanıp siliyordu (release'de "invalid_icon" hatası).
+  Bu dosya kaynak küçültücüye bunun kullanıldığını açıkça söyler.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification,@drawable/ic_bg_service_small" />

@@ -1,0 +1,79 @@
+name: mtools
+description: MTools v2 - Homelab Management App
+publish_to: 'none'
+version: 3.2.0+18
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Firebase & Auth
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.0.0
+  google_sign_in: ^6.2.1
+  cloud_firestore: ^5.0.0
+
+  # HTTP & API
+  dio: ^5.4.0
+
+  # State Management
+  provider: ^6.1.1
+
+  # Local Storage
+  shared_preferences: ^2.2.2
+
+  # Biyometrik giriş
+  local_auth: ^2.1.8
+
+  # Bildirimler
+  flutter_local_notifications: ^17.0.0
+  flutter_background_service: ^5.0.5
+
+  # UI
+  flutter_animate: ^4.5.0
+  fl_chart: ^0.68.0
+
+  # SSH Terminal
+  dartssh2: ^2.9.0
+  xterm: ^4.0.0
+
+  # İzinler & Cihaz
+  permission_handler: ^11.3.1
+  device_info_plus: ^9.0.0
+
+  # URL & Mail
+  url_launcher: ^6.2.5
+
+  # Uygulama versiyon bilgisi (onboarding sayacı için)
+  package_info_plus: ^8.0.0
+
+  # Ekran üzeri tanıtım turu
+  showcaseview: ^3.0.0
+
+  # Uygulama içi güncelleme — manifest imza doğrulama, APK bütünlük kontrolü
+  cryptography: ^2.9.0
+  crypto: ^3.0.7
+  path_provider: ^2.1.6
+  open_filex: ^4.7.0
+  home_widget: ^0.9.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/branding/icon-1024.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/branding/icon-adaptive-foreground-1024.png"
+  adaptive_icon_monochrome: "assets/branding/icon-monochrome-1024.png"

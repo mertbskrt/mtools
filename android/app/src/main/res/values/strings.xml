@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget seçicide (uzun basıp "Widget'lar" dediğinde) üç widget'ın
+         birbirinden ayırt edilebilmesi için ayrı etiket/açıklama. -->
+    <string name="proxmox_widget_label">MTools — Sistem</string>
+    <string name="proxmox_widget_description">Proxmox sunucularının CPU/RAM ve çevrimiçi durumu</string>
+
+    <string name="adguard_widget_label">MTools — AdGuard</string>
+    <string name="adguard_widget_description">AdGuard Home koruma durumu ve engellenen sorgu oranı</string>
+
+    <string name="ups_widget_label">MTools — UPS</string>
+    <string name="ups_widget_description">UPS batarya durumu ve elektrik kesintisi bilgisi</string>
+</resources>
