@@ -8,8 +8,8 @@ meraklıları için yazıldı.
 > Bu proje kişisel bir homelab aracıdır; kurumsal/production kullanım için
 > test edilmemiştir.
 
-Bu repo sadece **kaynak kodu** içerir. Hazır derlenmiş, imzalanmış APK
-sürümleri için: [mertbskrt/mtools-releases](https://github.com/mertbskrt/mtools-releases).
+This repository contains source code only. For pre-built, signed APK
+releases, see: [mertbskrt/mtools-releases](https://github.com/mertbskrt/mtools-releases).
 
 ## Özellikler
 
@@ -55,11 +55,11 @@ flutter pub get
 
 ### Kendi Firebase Projenizi Bağlama
 
-Bu depo `google-services.json`, `firebase_options.dart` ve `firebase.json`
-dosyalarını **içermez** (`.gitignore`'da hariç tutulmuştur) — bunlar her
-geliştiricinin kendi Firebase projesine özgüdür. `firebase.json`'ın nasıl
-görüneceğine dair bir örnek için `firebase.json.example`'a bakabilirsiniz;
-aşağıdaki adımlardan sonra gerçek dosya otomatik oluşur.
+This repository does not include `google-services.json`,
+`firebase_options.dart`, or `firebase.json` (excluded via `.gitignore`) —
+these are specific to each developer's own Firebase project. For an
+example of what `firebase.json` looks like, see `firebase.json.example`;
+the real file is generated automatically after the steps below.
 
 1. [Firebase Console](https://console.firebase.google.com)'da yeni bir
    proje oluşturun.
