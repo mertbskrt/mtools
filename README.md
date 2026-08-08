@@ -8,6 +8,9 @@ meraklıları için yazıldı.
 > Bu proje kişisel bir homelab aracıdır; kurumsal/production kullanım için
 > test edilmemiştir.
 
+Bu repo sadece **kaynak kodu** içerir. Hazır derlenmiş, imzalanmış APK
+sürümleri için: [mertbskrt/mtools-releases](https://github.com/mertbskrt/mtools-releases).
+
 ## Özellikler
 
 - **Proxmox VE yönetimi** — node/VM/container durumu, başlat/durdur/yeniden
