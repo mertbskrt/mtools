@@ -5,7 +5,7 @@
   izin ver" native olarak kurulamıyor. MTools bilinçli olarak sadece kendi
   yönettiğiniz sunuculara (Proxmox/AdGuard Home/NUT) LAN üzerinden bağlanır;
   cleartext burada genel olarak açılıyor, IP kısıtlaması uygulama tarafında
-  değerlendirilebilir bir sonraki adım olarak not edildi (bkz. rapor).
+  değerlendirilebilir bir sonraki adım olarak not edildi.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />

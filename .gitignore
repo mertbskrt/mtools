@@ -55,3 +55,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Machine-local SDK paths — never portable, never committed.
+android/local.properties
