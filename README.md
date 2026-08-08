@@ -1,59 +1,59 @@
 # MTools
 
-MTools, ev/homelab sunucularınızı (Proxmox, AdGuard Home, NUT/UPS) tek bir
-Flutter uygulamasından yönetmenizi sağlayan bir mobil kontrol paneli.
-Kendi ağınızdaki cihazları yöneten hobi kullanıcıları ve homelab
-meraklıları için yazıldı.
+MTools is a mobile control panel that lets you manage your home/homelab
+servers (Proxmox, AdGuard Home, NUT/UPS) from a single Flutter app. Built
+for hobbyists and homelab enthusiasts who manage devices on their own
+network.
 
-> Bu proje kişisel bir homelab aracıdır; kurumsal/production kullanım için
-> test edilmemiştir.
+> This is a personal homelab tool; it has not been tested for
+> enterprise/production use.
 
 This repository contains source code only. For pre-built, signed APK
 releases, see: [mertbskrt/mtools-releases](https://github.com/mertbskrt/mtools-releases).
 
-## Özellikler
+## Features
 
-- **Proxmox VE yönetimi** — node/VM/container durumu, başlat/durdur/yeniden
-  başlat, yeni VM/container oluşturma, disk/CPU/RAM/sıcaklık izleme.
-- **AdGuard Home kontrolü** — koruma aç/kapa, filtre listesi yönetimi,
-  sorgu istatistikleri.
-- **UPS izleme (NUT)** — bağlı UPS cihazlarının durumu, batarya/yük bilgisi.
-- **SSH Terminal** — kayıtlı sunuculara doğrudan terminal erişimi.
-- **Wake on LAN** — ağdaki cihazları uzaktan uyandırma.
-- **Arka plan izleme ve bildirimler** — belirlediğiniz eşiklere göre
-  (CPU/RAM/disk/UPS vb.) push bildirimleri, uygulama içi bildirim geçmişi.
-- **Uygulama kilidi** — PIN ve/veya biyometrik kilit.
-- **Bulut senkronizasyonu (opsiyonel)** — Google hesabınızla giriş yaparak
-  sunucu listeleri/ayarları cihazlar arası senkronize edilebilir (Firebase
-  Firestore üzerinden — kendi Firebase projenizi bağlamanız gerekir,
-  aşağıya bakın).
+- **Proxmox VE management** — node/VM/container status, start/stop/restart,
+  creating new VMs/containers, disk/CPU/RAM/temperature monitoring.
+- **AdGuard Home control** — toggle protection, filter list management,
+  query statistics.
+- **UPS monitoring (NUT)** — status of connected UPS devices, battery/load
+  info.
+- **SSH Terminal** — direct terminal access to your saved servers.
+- **Wake on LAN** — remotely wake devices on your network.
+- **Background monitoring and notifications** — push notifications based
+  on thresholds you set (CPU/RAM/disk/UPS, etc.), with an in-app
+  notification history.
+- **App lock** — PIN and/or biometric lock.
+- **Cloud sync (optional)** — sign in with your Google account to sync
+  server lists/settings across devices (via Firebase Firestore — requires
+  connecting your own Firebase project, see below).
 
-## Ekran Görüntüleri
+## Screenshots
 
-| Ana Ekran | Proxmox | Terminal |
+| Home | Proxmox | Terminal |
 |---|---|---|
 | _placeholder_ | _placeholder_ | _placeholder_ |
 
-_(Ekran görüntüleri yakında eklenecek.)_
+_(Screenshots coming soon.)_
 
-## Kurulum
+## Installation
 
-### Gereksinimler
+### Requirements
 
-- Flutter **3.41.9** veya üzeri (stable channel)
-- Android Studio / Xcode (platforma göre)
-- Bir Firebase projesi (bulut senkronizasyonu ve Google ile giriş için —
-  bu adım olmadan uygulama Proxmox/AdGuard/UPS/Terminal/WOL özelliklerini
-  yerel modda çalıştırabilir, ancak giriş ekranı ve bulut senkronu
-  çalışmaz)
+- Flutter **3.41.9** or later (stable channel)
+- Android Studio / Xcode (depending on platform)
+- A Firebase project (for cloud sync and Google sign-in — without this
+  step the app can still run the Proxmox/AdGuard/UPS/Terminal/WOL
+  features locally, but the sign-in screen and cloud sync won't work)
 
 ```bash
-git clone <bu-repo>
+git clone <this-repo>
 cd mtools_v2
 flutter pub get
 ```
 
-### Kendi Firebase Projenizi Bağlama
+### Connecting Your Own Firebase Project
 
 This repository does not include `google-services.json`,
 `firebase_options.dart`, or `firebase.json` (excluded via `.gitignore`) —
@@ -61,53 +61,51 @@ these are specific to each developer's own Firebase project. For an
 example of what `firebase.json` looks like, see `firebase.json.example`;
 the real file is generated automatically after the steps below.
 
-1. [Firebase Console](https://console.firebase.google.com)'da yeni bir
-   proje oluşturun.
-2. Projeye bir **Android uygulaması** ekleyin — paket adı olarak
-   `android/app/build.gradle.kts` içindeki `applicationId` değerini kullanın.
-3. İndirilen `google-services.json` dosyasını `android/app/` klasörüne koyun.
-4. [FlutterFire CLI](https://firebase.google.com/docs/flutter/setup)'yi
-   kurup proje kökünde çalıştırın:
+1. Create a new project in the
+   [Firebase Console](https://console.firebase.google.com).
+2. Add an **Android app** to the project — use the `applicationId` value
+   from `android/app/build.gradle.kts` as the package name.
+3. Place the downloaded `google-services.json` file in `android/app/`.
+4. Install the [FlutterFire CLI](https://firebase.google.com/docs/flutter/setup)
+   and run it from the project root:
    ```bash
    dart pub global activate flutterfire_cli
    flutterfire configure
    ```
-   Bu komut `lib/firebase_options.dart` dosyasını sizin projenize göre
-   otomatik oluşturur.
-5. Firebase Console'da **Authentication → Google** sağlayıcısını
-   etkinleştirin.
-6. Firestore'u oluşturun ve güvenlik kurallarını gözden geçirin (bu
-   uygulama kullanıcı başına ayar/sunucu-listesi senkronu için
-   `users/{uid}` altında okuma/yazma yapar — kuralları buna göre
-   kısıtlamanız önerilir).
+   This command automatically generates `lib/firebase_options.dart` for
+   your project.
+5. Enable the **Authentication → Google** provider in the Firebase
+   Console.
+6. Create Firestore and review the security rules (this app reads/writes
+   per-user settings/server-list sync under `users/{uid}` — it's
+   recommended you restrict the rules accordingly).
 
-### Çalıştırma
+### Running
 
 ```bash
 flutter run
 ```
 
-## Ağ / Güvenlik Notu
+## Network / Security Note
 
-MTools, yönettiğiniz sunuculara (Proxmox API, AdGuard Home API, SSH, NUT)
-**doğrudan yerel ağınız üzerinden** bağlanır — bu trafik uygulamanın kendi
-sunucusundan geçmez. Proxmox/AdGuard bağlantıları için kendi sunucularınızda
-geçerli bir TLS sertifikası kullanmanız önerilir; SSH bağlantıları
-standart SSH protokolüyle şifrelenir. Kimlik bilgilerinin nasıl
-saklandığı ve güvenlik bulgusu bildirme adresi için bkz.
-[SECURITY.md](SECURITY.md).
+MTools connects to the servers you manage (Proxmox API, AdGuard Home API,
+SSH, NUT) **directly over your local network** — this traffic never
+passes through any server of the app's own. For Proxmox/AdGuard
+connections, using a valid TLS certificate on your own servers is
+recommended; SSH connections are encrypted with the standard SSH
+protocol. For details on how credentials are stored and how to report a
+security issue, see [SECURITY.md](SECURITY.md).
 
-## Yol Haritası
+## Roadmap
 
-- **`flutter_secure_storage` migrasyonu** — kimlik bilgileri şu an
-  standart SharedPreferences'ta duruyor (uygulamaya özel, düz metin);
-  işletim sisteminin donanım destekli şifrelemesini kullanan bir depoya
-  taşınması planlanıyor.
-- **İstemci tarafı şifreli bulut senkronu** — şu an kimlik bilgileri
-  buluta hiç senkronize edilmiyor (sadece sunucu yapısı gider); ileride
-  kimlik bilgilerinin de, sunucuda hiç düz metin görünmeyecek şekilde
-  istemci tarafında şifrelenip senkronize edilmesi değerlendirilebilir.
+- **`flutter_secure_storage` migration** — credentials currently live in
+  standard SharedPreferences (app-private, plaintext); moving them to a
+  store backed by the OS's hardware-backed encryption is planned.
+- **Client-side encrypted cloud sync** — credentials currently aren't
+  synced to the cloud at all (only server structure is); in the future,
+  syncing credentials too — encrypted client-side so they're never
+  visible in plaintext on the server — may be considered.
 
-## Lisans
+## License
 
-MIT — bkz. [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

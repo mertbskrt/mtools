@@ -1,34 +1,32 @@
-# Güvenlik
+# Security
 
-MTools kişisel bir homelab aracıdır. Bu belge, hangi verinin nerede
-saklandığını ve bir güvenlik sorunu bulursanız ne yapmanız gerektiğini
-dürüstçe anlatır.
+MTools is a personal homelab tool. This document honestly describes
+where your data is stored and what to do if you find a security issue.
 
-## Kimlik bilgileri nerede saklanır
+## Where credentials are stored
 
-Proxmox API token'ları, SSH şifreleri, AdGuard Home ve NUT/UPS kullanıcı
-adı-şifreleri **sadece cihazınızda**, standart Android SharedPreferences
-üzerinde saklanır — düz metin olarak, uygulamaya özel (diğer uygulamaların
-erişemediği) depoda. Bu veriler **buluta senkronize edilmez**: Google ile
-giriş yaptığınızda cihazlar arası senkronize olan tek şey sunucu *yapısı*
-(isim, host, port, URL) — şifre/token alanları hiçbir zaman Firestore'a
-yazılmaz.
+Proxmox API tokens, SSH passwords, and AdGuard Home / NUT-UPS
+usernames-passwords are stored **only on your device**, in standard
+Android SharedPreferences — in plaintext, in app-private storage
+(inaccessible to other apps). This data is **never synced to the
+cloud**: when you sign in with Google, the only thing that syncs across
+devices is the server's *structure* (name, host, port, URL) — password/
+token fields are never written to Firestore.
 
-`flutter_secure_storage` (işletim sisteminin donanım destekli
-şifrelemesini kullanan bir depo) henüz kullanılmıyor — bu, bilinen bir
-yol haritası maddesi (bkz. README).
+`flutter_secure_storage` (a store backed by the OS's hardware-backed
+encryption) isn't used yet — this is a known roadmap item (see README).
 
-## Bulut senkronu
+## Cloud sync
 
-Google hesabınızla giriş yaptığınızda, Firestore'daki `users/{uid}`
-dokümanınıza sadece şu veriler yazılır: sunucu yapısı (kimlik bilgisi
-hariç), tema tercihi, sekme düzeni, node sıralaması, bildirim kuralları,
-Wake-on-LAN cihaz listesi. Firestore erişimi **uid bazlı kilitlidir** —
-her kullanıcı sadece kendi dokümanını okuyup yazabilir.
+When you sign in with your Google account, only the following data is
+written to your `users/{uid}` document in Firestore: server structure
+(excluding credentials), theme preference, tab layout, node ordering,
+notification rules, and the Wake-on-LAN device list. Firestore access is
+**locked per uid** — each user can only read and write their own
+document.
 
-## Bir güvenlik sorunu mu buldunuz?
+## Found a security issue?
 
-Lütfen bir GitHub issue açmak yerine doğrudan
-**mertbaskurt14@gmail.com** adresine yazın. Elinizden geldiğince ayrıntı
-verin (adımlar, etkilenen sürüm) — makul bir sürede yanıt vermeye
-çalışacağım.
+Please email **mertbaskurt14@gmail.com** directly instead of opening a
+GitHub issue. Include as much detail as you can (steps, affected
+version) — I'll try to respond within a reasonable time.
