@@ -10,6 +10,7 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
 import es.antonborri.home_widget.HomeWidgetProvider
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Locale
 
 /// UPS (NUT) durumunu gösteren widget. Veri, uygulama (NutProvider.refresh())
@@ -80,7 +81,9 @@ class UpsWidgetProvider : HomeWidgetProvider() {
         // alana çok farklı şekilde sığar. Satır başına düşen gerçek alan
         // hesaplanıp ona göre karar veriliyor.
         val rowCount = try {
-            if (raw != null) JSONArray(raw).length().coerceIn(1, MAX_ROWS) else 1
+            if (raw != null) {
+                (JSONObject(raw).optJSONArray("units")?.length() ?: 0).coerceIn(1, MAX_ROWS)
+            } else 1
         } catch (e: Exception) {
             1
         }
@@ -111,15 +114,45 @@ class UpsWidgetProvider : HomeWidgetProvider() {
     private fun buildViews(context: Context, layoutId: Int, raw: String?, detailed: Boolean): RemoteViews {
         val views = RemoteViews(context.packageName, layoutId)
 
-        val units = try {
-            if (raw != null) JSONArray(raw) else JSONArray()
+        // AdGuard/Proxmox'la aynı 3-durumlu ayrım — bkz. ProxmoxWidgetProvider.
+        if (raw == null) {
+            views.setViewVisibility(R.id.ups_content, View.GONE)
+            views.setViewVisibility(R.id.ups_empty_text, View.VISIBLE)
+            views.setTextViewText(R.id.ups_empty_text, "Henüz yapılandırılmadı")
+            return views
+        }
+
+        val units: JSONArray
+        val configured: Boolean
+        val deviceOffline: Boolean
+        try {
+            val obj = JSONObject(raw)
+            configured = obj.optBoolean("configured", false)
+            // Birim-özel "reachable:false"tan bilinçli olarak ayrı — cihazın
+            // kendi interneti yokken background_service.dart bunu enjekte
+            // ediyor (bkz. _markWidgetsDeviceOffline), hangi UPS'in gerçekten
+            // ulaşılamaz olduğunu BİLMİYORUZ, sadece bilemediğimizi
+            // gösteriyoruz.
+            deviceOffline = obj.optBoolean("deviceOffline", false)
+            units = obj.optJSONArray("units") ?: JSONArray()
         } catch (e: Exception) {
-            JSONArray()
+            views.setViewVisibility(R.id.ups_content, View.GONE)
+            views.setViewVisibility(R.id.ups_empty_text, View.VISIBLE)
+            views.setTextViewText(R.id.ups_empty_text, "Veri okunamadı")
+            return views
+        }
+
+        if (!configured) {
+            views.setViewVisibility(R.id.ups_content, View.GONE)
+            views.setViewVisibility(R.id.ups_empty_text, View.VISIBLE)
+            views.setTextViewText(R.id.ups_empty_text, "Henüz yapılandırılmadı")
+            return views
         }
 
         if (units.length() == 0) {
             views.setViewVisibility(R.id.ups_content, View.GONE)
             views.setViewVisibility(R.id.ups_empty_text, View.VISIBLE)
+            views.setTextViewText(R.id.ups_empty_text, "Bağlantı yok")
             try {
                 views.setViewVisibility(R.id.ups_overflow_text, View.GONE)
             } catch (_: Exception) {
@@ -155,25 +188,30 @@ class UpsWidgetProvider : HomeWidgetProvider() {
                 views.setInt(
                     ICON_IDS[i],
                     "setColorFilter",
-                    if (!reachable) COLOR_UNREACHABLE else if (onBattery) COLOR_ON_BATTERY else COLOR_ON_MAINS,
+                    if (!reachable || deviceOffline) COLOR_UNREACHABLE else if (onBattery) COLOR_ON_BATTERY else COLOR_ON_MAINS,
                 )
                 // Ulaşılamıyorsa şarj/bar son bilinen değeri gösterir (bkz.
                 // background_service.dart'taki ups_bg_last_charge_ kalıcılığı)
                 // ama satır metni bunun BAYAT olduğunu açıkça söyler — sessizce
-                // güncelmiş gibi görünmesin diye.
+                // güncelmiş gibi görünmesin diye. deviceOffline, !reachable'dan
+                // AYRI bir sebep — hangi UPS'in gerçekten ulaşılamaz olduğunu
+                // bilmiyoruz, sadece cihazın interneti olmadığını biliyoruz.
                 views.setTextViewText(CHARGE_IDS[i], "%$charge")
                 views.setProgressBar(BAR_IDS[i], 100, charge.coerceIn(0, 100), false)
                 trySetText(
                     views,
                     RUNTIME_IDS[i],
                     when {
+                        deviceOffline -> "Bağlantı yok"
                         !reachable -> "Bağlantı yok"
                         onBattery && runtimeLabel != "-" -> "Pilde · kalan: $runtimeLabel"
                         else -> statusLabel
                     },
                 )
                 if (detailed) {
-                    val detailText = if (!reachable) {
+                    val detailText = if (deviceOffline) {
+                        "Cihazınızın interneti yok — son bilinen değerler gösteriliyor"
+                    } else if (!reachable) {
                         "Sunucuya ulaşılamıyor — son bilinen değerler gösteriliyor"
                     } else {
                         val voltageText = if (voltage > 0) String.format(Locale.US, "%.1fV", voltage) else ""

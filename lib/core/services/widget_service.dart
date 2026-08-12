@@ -17,6 +17,7 @@ class WidgetService {
   static const _proxmoxWidget = 'ProxmoxWidgetProvider';
   static const _adguardWidget = 'AdGuardWidgetProvider';
   static const _upsWidget = 'UpsWidgetProvider';
+  static const _wolWidget = 'WolWidgetProvider';
 
   static Future<void> updateProxmox(ProxmoxProvider provider) async {
     try {
@@ -44,7 +45,15 @@ class WidgetService {
           if (temp != null) 'temp': temp,
         });
       }
-      await HomeWidget.saveWidgetData('proxmox_nodes_json', jsonEncode(nodes));
+      // configured, "hiç sunucu eklenmedi" ile "sunucu ekli ama şu an
+      // erişilemiyor" durumlarını widget'ın ayırt edebilmesi için — bkz.
+      // ProxmoxWidgetProvider.kt'nin 3-durumlu boş mesajı (AdGuard'la aynı
+      // desen).
+      final data = {
+        'configured': provider.isConfigured,
+        'nodes': nodes,
+      };
+      await HomeWidget.saveWidgetData('proxmox_nodes_json', jsonEncode(data));
       await HomeWidget.saveWidgetData(
           'proxmox_updated_at', DateTime.now().millisecondsSinceEpoch);
       await HomeWidget.updateWidget(
@@ -116,12 +125,34 @@ class WidgetService {
           'statusLabel': data.statusLabel,
         };
       }).toList();
-      await HomeWidget.saveWidgetData('ups_units_json', jsonEncode(units));
+      final data = {
+        'configured': provider.servers.isNotEmpty,
+        'units': units,
+      };
+      await HomeWidget.saveWidgetData('ups_units_json', jsonEncode(data));
       await HomeWidget.saveWidgetData(
           'ups_updated_at', DateTime.now().millisecondsSinceEpoch);
       await HomeWidget.updateWidget(
         androidName: _upsWidget,
         qualifiedAndroidName: 'com.example.mtools_v2.$_upsWidget',
+      );
+    } catch (_) {
+      // Bilinçli sessiz: ana ekran widget'ı güncellenemese bile uygulama
+      // içi deneyimi etkilemez, sadece OS ana ekranındaki widget bayat kalır.
+    }
+  }
+
+  /// [devices], WolTarget.toJson() çıktılarının listesi — WidgetService
+  /// bilinçli olarak wol_screen.dart'taki WolTarget tipine bağımlı değil,
+  /// diğer update* metotlarıyla aynı seviyede kalması için düz Map alıyor.
+  static Future<void> updateWol(List<Map<String, dynamic>> devices) async {
+    try {
+      await HomeWidget.saveWidgetData('wol_devices_json', jsonEncode(devices));
+      await HomeWidget.saveWidgetData(
+          'wol_devices_updated_at', DateTime.now().millisecondsSinceEpoch);
+      await HomeWidget.updateWidget(
+        androidName: _wolWidget,
+        qualifiedAndroidName: 'com.example.mtools_v2.$_wolWidget',
       );
     } catch (_) {
       // Bilinçli sessiz: ana ekran widget'ı güncellenemese bile uygulama

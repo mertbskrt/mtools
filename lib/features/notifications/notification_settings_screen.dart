@@ -879,6 +879,8 @@ class _CategorySection extends StatelessWidget {
         return Icons.electrical_services_outlined;
       case 'AdGuard':
         return Icons.shield_outlined;
+      case 'Bağlantı':
+        return Icons.signal_wifi_off_rounded;
       default:
         return Icons.tune_outlined;
     }
@@ -898,6 +900,8 @@ class _CategorySection extends StatelessWidget {
         return 'Batarya, yük ve sıcaklık izleme';
       case 'AdGuard':
         return 'Sunucu erişilebilirlik izleme';
+      case 'Bağlantı':
+        return 'Telefonunuzun kendi internet bağlantısı';
       default:
         return '';
     }

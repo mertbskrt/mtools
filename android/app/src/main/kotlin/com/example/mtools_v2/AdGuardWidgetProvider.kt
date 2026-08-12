@@ -89,13 +89,24 @@ class AdGuardWidgetProvider : HomeWidgetProvider() {
             val data = JSONObject(raw)
             val configured = data.optBoolean("configured", false)
             val connected = data.optBoolean("connected", false)
+            // connected:false'tan bilinçli olarak ayrı bir sebep — cihazın
+            // kendi interneti yokken background_service.dart bunu enjekte
+            // ediyor (bkz. _markWidgetsDeviceOffline). AdGuard zaten "bayat
+            // sayı" göstermiyor (connected:false'ta hiç istatistik
+            // taşınmıyor), bu yüzden aynı boş-durum mekanizması yeniden
+            // kullanılıyor, sadece sebep metni değişiyor.
+            val deviceOffline = data.optBoolean("deviceOffline", false)
 
-            if (!configured || !connected) {
+            if (!configured || !connected || deviceOffline) {
                 views.setViewVisibility(R.id.adguard_content, View.GONE)
                 views.setViewVisibility(R.id.adguard_empty_text, View.VISIBLE)
                 views.setTextViewText(
                     R.id.adguard_empty_text,
-                    if (!configured) "Henüz yapılandırılmadı" else "Bağlantı yok",
+                    when {
+                        !configured -> "Henüz yapılandırılmadı"
+                        deviceOffline -> "Cihazınızın interneti yok"
+                        else -> "Bağlantı yok"
+                    },
                 )
                 return views
             }

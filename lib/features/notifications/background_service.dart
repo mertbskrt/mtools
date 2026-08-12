@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -204,7 +205,9 @@ void onStart(ServiceInstance service) async {
     }
     // Arka plana geçildiği an bir kez hemen kontrol et — periyodik
     // zamanlayıcının ilk turunu (en fazla intervalSeconds) beklemeye gerek yok.
-    await _runCheck(plugin: plugin);
+    if (await _guardConnectivity(plugin: plugin)) {
+      await _runCheck(plugin: plugin);
+    }
   });
 
   final initialSettings = await _loadNotifSettings();
@@ -214,8 +217,14 @@ void onStart(ServiceInstance service) async {
     // Uygulama ön plandayken canlı ekranlar zaten aynı veriyi çekiyor —
     // burada tekrar sorgulamak hem gereksiz hem de çift bildirime yol açar.
     if (appInForeground) return;
-    await _runCheck(plugin: plugin);
-    await _refreshAdGuardWidget(plugin: plugin);
+    // Cihazın kendi interneti yoksa hiçbir alt servis (Proxmox/UPS/AdGuard)
+    // hiç denenmez — hem gereksiz batarya/veri tüketimini önler hem de her
+    // birinin kendi "ulaşılamıyor" bildirimini tek tek atmasını (asıl sorun
+    // tek: telefonun bağlantısı) engeller. Bkz. _guardConnectivity.
+    if (await _guardConnectivity(plugin: plugin)) {
+      await _runCheck(plugin: plugin);
+      await _refreshAdGuardWidget(plugin: plugin);
+    }
   });
 
   // Güvenlik ağı: notifyAppForegrounded()/notifyAppBackgrounded()'daki anlık
@@ -978,9 +987,16 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
   // Ana ekran widget'larını güncelle (bkz. üstteki not) — sessizce başarısız
   // olabilir, widget güncellemesi bildirim akışını bloklamamalı.
   try {
-    if (widgetNodes.isNotEmpty) {
+    // "configured" burada servis listesinin kendisinden (proxmoxServices/
+    // nutServices) geliyor, widgetNodes/widgetUps'un o turda dolu olup
+    // olmamasından DEĞİL — aksi halde "sunucu ekli ama tamamen erişilemiyor
+    // ve hiç bilinen node/UPS kaydı yok" durumu yanlışlıkla "hiç
+    // yapılandırılmadı" gibi görünürdü (bkz. AdGuard'daki aynı 3-durumlu
+    // desen).
+    if (proxmoxServices.isNotEmpty) {
       await HomeWidget.saveWidgetData(
-          'proxmox_nodes_json', jsonEncode(widgetNodes));
+          'proxmox_nodes_json',
+          jsonEncode({'configured': true, 'nodes': widgetNodes}));
       await HomeWidget.saveWidgetData(
           'proxmox_updated_at', DateTime.now().millisecondsSinceEpoch);
       await HomeWidget.updateWidget(
@@ -988,8 +1004,10 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
         qualifiedAndroidName: 'com.example.mtools_v2.ProxmoxWidgetProvider',
       );
     }
-    if (widgetUps.isNotEmpty) {
-      await HomeWidget.saveWidgetData('ups_units_json', jsonEncode(widgetUps));
+    if (nutServices.isNotEmpty) {
+      await HomeWidget.saveWidgetData(
+          'ups_units_json',
+          jsonEncode({'configured': true, 'units': widgetUps}));
       await HomeWidget.saveWidgetData(
           'ups_updated_at', DateTime.now().millisecondsSinceEpoch);
       await HomeWidget.updateWidget(
@@ -1002,6 +1020,183 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
     // deneyimi etkilemez, sadece OS ana ekranındaki widget bayat kalır.
     debugPrint('[MTools BG] Widget güncelleme hatası: $e');
   }
+}
+
+/// Cihazın (telefonun) kendi internet erişimi var mı — WiFi/mobil veri
+/// arayüzünün "bağlı" görünmesi yetmez, gerçek bir DNS sorgusuyla doğrulanır
+/// (bkz. `ConnectivityProvider`, ön plan tarafındaki aynı teknik — arka plan
+/// izole ayrı bir FlutterEngine olduğu için o provider'ı doğrudan kullanamaz,
+/// aynı tekniği burada bağımsız olarak tekrarlıyoruz).
+Future<bool> _hasDeviceInternet() async {
+  try {
+    final result = await InternetAddress.lookup('one.one.one.one')
+        .timeout(const Duration(seconds: 4));
+    return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Proxmox/NUT/AdGuard'ın kendi ardışık-hata sayaçlarını sıfırlar — cihaz
+/// bağlantısı geri geldiğinde çağrılır ki bağlantı kopukken (zaten hiç
+/// denenmedikleri için) sayaçlarında birikmiş OLMAYAN, ama kopmadan HEMEN
+/// ÖNCE genuine bir sebeple birikmiş olabilecek eski bir değer, yeniden
+/// bağlanır bağlanmaz "1 eski + 1 yeni = eşik aşıldı" şeklinde yanlışlıkla
+/// erken bir servis-özel bildirime yol açmasın — her üç servis de
+/// bağlantı sonrası tam iki temiz denemeye sahip olsun.
+Future<void> _resetServiceFailCounters(SharedPreferences prefs) async {
+  final keys = prefs.getKeys().where((k) =>
+      k.startsWith('proxmox_fail_count_') ||
+      k.startsWith('nut_fail_count_') ||
+      k == 'adguard_fail_count');
+  for (final key in keys.toList()) {
+    await prefs.remove(key);
+  }
+}
+
+const _kDeviceOfflineKey = 'device_connectivity_offline';
+const _kDeviceFailCountKey = 'device_connectivity_fail_count';
+
+/// Proxmox/UPS/AdGuard sorgularından ÖNCE çağrılır. Cihazın kendi interneti
+/// yoksa `false` döner — çağıran taraf o turda HİÇBİR alt servisi
+/// denemeMELİdir (hem gereksiz batarya/veri tüketimini önler hem de "asıl
+/// sorun tek: telefonun bağlantısı" durumunda üç ayrı servis-özel
+/// "ulaşılamıyor" bildirimi atılmasını engeller). Servis-özel bildirimler
+/// (upsUnreachable, adguardUnreachable, nodeOffline vb.) bu fonksiyona hiç
+/// dokunulmuyor, aynen çalışmaya devam ediyor — bu sadece bir ön-kontrol
+/// katmanı.
+/// Proxmox/UPS/AdGuard'ın SON BİLİNEN widget verisine, servis-özel parse
+/// akışlarına hiç dokunmadan, ortak bir `deviceOffline: true` alanı ekler —
+/// üç *WidgetProvider.kt bunu kendi mevcut "ulaşılamıyor" render yolunda
+/// farklı bir sebep metniyle ("cihazın interneti yok" vs "sunucuya
+/// ulaşılamıyor") gösterir. Sadece cihaz-çevrimdışı geçişinde (bkz.
+/// _guardConnectivity) çağrılır; bağlantı geri gelince ayrıca "false"
+/// yazmaya gerek yok — _runCheck/_refreshAdGuardWidget normale dönünce bu
+/// alanı hiç içermeyen taze bir obje yazıyorlar, Kotlin tarafında
+/// optBoolean(..., false) otomatik false'a düşüyor.
+Future<void> _markWidgetsDeviceOffline() async {
+  const keys = ['proxmox_nodes_json', 'ups_units_json', 'adguard_stats_json'];
+  for (final key in keys) {
+    final raw = await HomeWidget.getWidgetData<String>(key);
+    if (raw == null) continue;
+    try {
+      final obj = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      obj['deviceOffline'] = true;
+      await HomeWidget.saveWidgetData(key, jsonEncode(obj));
+    } catch (_) {
+      // Bilinçli sessiz: JSON bozuksa dokunma — bir sonraki başarılı yazım
+      // (bağlantı dönünce) zaten taze, doğru bir obje yazacak.
+    }
+  }
+  try {
+    await HomeWidget.updateWidget(
+      androidName: 'ProxmoxWidgetProvider',
+      qualifiedAndroidName: 'com.example.mtools_v2.ProxmoxWidgetProvider',
+    );
+    await HomeWidget.updateWidget(
+      androidName: 'UpsWidgetProvider',
+      qualifiedAndroidName: 'com.example.mtools_v2.UpsWidgetProvider',
+    );
+    await HomeWidget.updateWidget(
+      androidName: 'AdGuardWidgetProvider',
+      qualifiedAndroidName: 'com.example.mtools_v2.AdGuardWidgetProvider',
+    );
+  } catch (_) {
+    // Bilinçli sessiz: widget güncellemesi opsiyonel, ana akışı bloklamaz.
+  }
+}
+
+Future<bool> _guardConnectivity({
+  required FlutterLocalNotificationsPlugin plugin,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final online = await _hasDeviceInternet();
+
+  if (online) {
+    final wasOffline = prefs.getBool(_kDeviceOfflineKey) ?? false;
+    await prefs.setInt(_kDeviceFailCountKey, 0);
+    if (wasOffline) {
+      await prefs.setBool(_kDeviceOfflineKey, false);
+      // Servislerin kendi sayaçları, bağlantı kopukken zaten hiç
+      // ilerlemedi (bu fonksiyon false döndüğü sürece _runCheck/
+      // _refreshAdGuardWidget hiç çağrılmıyor) — ama kopmadan hemen önce
+      // birikmiş olabilecek eski bir değeri de temizleyip her üç servise
+      // tam temiz bir başlangıç veriyoruz.
+      await _resetServiceFailCounters(prefs);
+
+      final notifSettings = await _loadNotifSettings();
+      final notificationsAllowed = (notifSettings['serviceEnabled'] as bool) &&
+          !_isQuietNow(notifSettings);
+      final rulesRaw =
+          await HomeWidget.getWidgetData<String>('bg_notification_rules') ?? '';
+      final rules = _parseRules(rulesRaw);
+      final historyRaw = prefs.getString('notification_history');
+      final List<Map<String, dynamic>> history = historyRaw != null
+          ? List<Map<String, dynamic>>.from((jsonDecode(historyRaw) as List)
+              .map((e) => Map<String, dynamic>.from(e)))
+          : [];
+
+      final rule = _findRule(rules, NotificationTrigger.connectivityLost);
+      if (rule != null && rule.enabled) {
+        await _sendNotification(
+          plugin,
+          prefs,
+          notificationsAllowed,
+          history,
+          511,
+          'İnternet Bağlantınız Geri Geldi',
+          'İzleme devam ediyor · ${hhmm(DateTime.now())}',
+          cooldownKey: 'connectivity_restored',
+          cooldownMinutes: 0,
+        );
+      }
+      await prefs.setString('notification_history', jsonEncode(history));
+    }
+    return true;
+  }
+
+  // Çevrimdışı: alt servisleri bu turda hiç deneme — sayaçları donduruyoruz.
+  final failCount = (prefs.getInt(_kDeviceFailCountKey) ?? 0) + 1;
+  await prefs.setInt(_kDeviceFailCountKey, failCount);
+
+  // İlk hatada hemen bildirim atmıyoruz — bkz. _kConsecutiveFailuresForOffline
+  // (kısa bir tünelden geçip hemen geri gelmek false-positive üretmesin).
+  // Ama alt servisleri denemeyi bu turdan itibaren zaten durduruyoruz.
+  if (failCount >= _kConsecutiveFailuresForOffline &&
+      !(prefs.getBool(_kDeviceOfflineKey) ?? false)) {
+    await prefs.setBool(_kDeviceOfflineKey, true);
+    await _markWidgetsDeviceOffline();
+
+    final notifSettings = await _loadNotifSettings();
+    final notificationsAllowed =
+        (notifSettings['serviceEnabled'] as bool) && !_isQuietNow(notifSettings);
+    final rulesRaw =
+        await HomeWidget.getWidgetData<String>('bg_notification_rules') ?? '';
+    final rules = _parseRules(rulesRaw);
+    final historyRaw = prefs.getString('notification_history');
+    final List<Map<String, dynamic>> history = historyRaw != null
+        ? List<Map<String, dynamic>>.from((jsonDecode(historyRaw) as List)
+            .map((e) => Map<String, dynamic>.from(e)))
+        : [];
+
+    final rule = _findRule(rules, NotificationTrigger.connectivityLost);
+    if (rule != null && rule.enabled) {
+      await _sendNotification(
+        plugin,
+        prefs,
+        notificationsAllowed,
+        history,
+        509,
+        'İnternet Bağlantınız Yok',
+        'İzleme geçici olarak duraklatıldı · ${hhmm(DateTime.now())}',
+        cooldownKey: 'connectivity_lost',
+        cooldownMinutes: rule.cooldownMinutes,
+      );
+    }
+    await prefs.setString('notification_history', jsonEncode(history));
+  }
+
+  return false;
 }
 
 /// AdGuard, Proxmox/UPS'in paylaştığı `_runCheck()` içinde SORGULANMIYOR

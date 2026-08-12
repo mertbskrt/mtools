@@ -82,6 +82,18 @@
                 android:resource="@xml/proxmox_widget_info"/>
         </receiver>
 
+        <!-- Widget eklenirken/uzun basılıp "Yapılandır" denince açılan node
+             seçim ekranı — proxmox_widget_info.xml'deki android:configure
+             tarafından tetiklenir. -->
+        <activity
+            android:name=".ProxmoxWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Light">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".UpsWidgetProvider"
             android:label="@string/ups_widget_label"
@@ -93,6 +105,34 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/ups_widget_info"/>
         </receiver>
+
+        <receiver
+            android:name=".WolWidgetProvider"
+            android:label="@string/wol_widget_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/wol_widget_info"/>
+        </receiver>
+
+        <activity
+            android:name=".WolWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Light">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
+            </intent-filter>
+        </activity>
+
+        <!-- WOL widget'ındaki "Uyandır" butonlarının tetiklediği alıcı —
+             sadece uygulama içinden (PendingIntent ile) çağrılıyor, dışa
+             açık olması gerekmiyor. -->
+        <receiver
+            android:name=".WolWidgetActionReceiver"
+            android:exported="false"/>
 
     </application>
 

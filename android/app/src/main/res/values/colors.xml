@@ -13,5 +13,10 @@
     <color name="widget_success">#3DB885</color>
     <color name="widget_warning">#D4893A</color>
     <color name="widget_error">#D95C5C</color>
+    <!-- WOL widget buton zeminleri — widget_primary/widget_success'in düşük
+         opaklıklı hâli, diğer drawable'larla (widget_background,
+         widget_row_background) aynı "colors.xml'e referans ver" deseninde. -->
+    <color name="widget_wol_button_bg">#264A9EFF</color>
+    <color name="widget_wol_button_sent_bg">#263DB885</color>
 	<color name="ic_launcher_background">#FFFFFF</color>
 </resources>

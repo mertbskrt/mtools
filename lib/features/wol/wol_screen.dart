@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dartssh2/dartssh2.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/cloud_sync_service.dart';
+import '../../core/services/widget_service.dart';
 import '../proxmox/proxmox_provider.dart';
 
 // ─────────────────────────────────────────────
@@ -94,11 +95,16 @@ class _WolScreenState extends State<WolScreen> {
 
     if (raw != null) {
       final List list = jsonDecode(raw);
+      final parsed = list
+          .map((e) => WolTarget.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
       if (mounted) {
-        setState(() => _targets = list
-            .map((e) => WolTarget.fromJson(Map<String, dynamic>.from(e)))
-            .toList());
+        setState(() => _targets = parsed);
       }
+      // WOL widget'ının cihaz listesini beslemesi için — ekran kapalıyken
+      // (mounted false) de widget'ın en son bilinen listeyle senkron
+      // kalması gerekiyor, bu yüzden mounted kontrolünün dışında.
+      await WidgetService.updateWol(parsed.map((t) => t.toJson()).toList());
     }
   }
 
@@ -107,6 +113,7 @@ class _WolScreenState extends State<WolScreen> {
     final encoded = jsonEncode(_targets.map((t) => t.toJson()).toList());
     await prefs.setString('wol_devices', encoded);
     await CloudSyncService().saveSetting('wol_devices', encoded);
+    await WidgetService.updateWol(_targets.map((t) => t.toJson()).toList());
   }
 
   void _showAddDialog({WolTarget? target, int? index}) {

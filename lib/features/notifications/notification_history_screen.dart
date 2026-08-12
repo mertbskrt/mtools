@@ -37,6 +37,10 @@ class NotificationHistoryScreen extends StatelessWidget {
     }
     if (title.contains('UPS')) return Icons.battery_charging_full;
     if (title.contains('AdGuard')) return Icons.shield_outlined;
+    // 'İnternet' kontrolü Terminal/Bağlantı kontrolünden ÖNCE gelmeli —
+    // cihaz bağlantısı bildirimleri de 'Bağlantı' kelimesini içeriyor,
+    // aksi halde yanlışlıkla terminal ikonu alırlardı.
+    if (title.contains('İnternet')) return Icons.signal_wifi_off_rounded;
     if (title.contains('Terminal') || title.contains('Bağlantı')) {
       return Icons.terminal;
     }
@@ -60,7 +64,8 @@ class NotificationHistoryScreen extends StatelessWidget {
     }
     if (title.contains('Erişilemiyor') ||
         title.contains('Ulaşılamıyor') ||
-        title.contains('Çevrimdışı')) {
+        title.contains('Çevrimdışı') ||
+        title.contains('Bağlantınız Yok')) {
       return colors.error;
     }
     if (title.contains('Yüksek') ||
@@ -72,7 +77,8 @@ class NotificationHistoryScreen extends StatelessWidget {
         title.contains('Başladı') ||
         title.contains('Bağlandı') ||
         title.contains('Şebekeye Döndü') ||
-        title.contains('Yeniden Ulaşıldı')) {
+        title.contains('Yeniden Ulaşıldı') ||
+        title.contains('Bağlantınız Geri Geldi')) {
       return colors.success;
     }
     return colors.primary;

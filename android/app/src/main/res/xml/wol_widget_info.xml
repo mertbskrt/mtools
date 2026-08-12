@@ -11,8 +11,8 @@
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
-    android:initialLayout="@layout/widget_proxmox"
-    android:configure="com.example.mtools_v2.ProxmoxWidgetConfigureActivity"
-    android:description="@string/proxmox_widget_description"
-    android:previewLayout="@layout/widget_proxmox_small"
+    android:initialLayout="@layout/widget_wol"
+    android:configure="com.example.mtools_v2.WolWidgetConfigureActivity"
+    android:description="@string/wol_widget_description"
+    android:previewLayout="@layout/widget_wol_small"
     android:previewImage="@mipmap/ic_launcher" />

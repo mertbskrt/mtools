@@ -10,4 +10,7 @@
 
     <string name="ups_widget_label">MTools — UPS</string>
     <string name="ups_widget_description">UPS batarya durumu ve elektrik kesintisi bilgisi</string>
+
+    <string name="wol_widget_label">MTools — WOL</string>
+    <string name="wol_widget_description">Kayıtlı cihazları tek dokunuşla uyandırın (Wake on LAN)</string>
 </resources>

@@ -45,6 +45,13 @@ class ProxmoxProvider extends ChangeNotifier {
   bool isInitialLoad = true;
   bool isReady = false;
 
+  /// En az bir Proxmox sunucusu kaydedilmiş mi — `nodes.isNotEmpty`'den
+  /// bilinçli olarak farklı: sunucu tanımlı ama şu an tamamen erişilemez
+  /// olduğunda `nodes` boş kalabilir, bu widget'ın "hiç sunucu eklenmedi"
+  /// ile "sunucu ekli ama erişilemiyor" durumlarını ayırt edebilmesi için
+  /// gerekiyor (bkz. WidgetService.updateProxmox).
+  bool get isConfigured => _services.isNotEmpty;
+
   // NotificationProvider sadece UI'da history göstermek için tutuluyor
   // Bildirim üretimi artık background_service.dart'ta
   NotificationProvider? notificationProvider;

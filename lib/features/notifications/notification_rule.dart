@@ -27,6 +27,13 @@ enum NotificationTrigger {
   upsUnreachable,
   // AdGuard için sunucu tamamen erişilemez olduğunda ayrı bir sinyal.
   adguardUnreachable,
+  // Cihazın KENDİ internet bağlantısı (WiFi/mobil veri) koptuğunda — UPS/
+  // Proxmox/AdGuard'ın kendi "ulaşılamıyor" sinyallerinden bilinçli olarak
+  // ayrı: o üçü "cihazın interneti var ama şu sunucuya ulaşılamıyor"
+  // durumunu, bu ise "cihazın hiç interneti yok, hiçbir sunucu denenmedi"
+  // durumunu kapsar. UPS'teki upsUnreachable deseniyle aynı: hem kayıp hem
+  // geri gelme bildirimi AYNI tek trigger/toggle üzerinden yönetilir.
+  connectivityLost,
 }
 
 class NotificationRule {
@@ -281,6 +288,17 @@ class NotificationRule {
               'AdGuard Home sunucusuna hiç bağlanılamadığında bildir',
           icon: Icons.wifi_off_rounded,
           category: 'AdGuard',
+        ),
+        NotificationRule(
+          trigger: NotificationTrigger.connectivityLost,
+          enabled: true,
+          threshold: 0,
+          cooldownMinutes: 5,
+          label: 'Cihaz Bağlantısı',
+          description:
+              'Telefonunuzun internet bağlantısı kesildiğinde/geri geldiğinde bildir',
+          icon: Icons.wifi_off_rounded,
+          category: 'Bağlantı',
         ),
       ];
 }
