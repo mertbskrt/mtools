@@ -4,9 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/mtools_mark.dart';
 import '../../core/theme/design_widgets.dart';
+import '../../core/utils/app_transitions.dart';
 import 'update_service.dart';
 import 'update_manifest.dart';
 import 'update_installer.dart';
+import 'release_history_screen.dart';
 
 const _kLastCheckedKey = 'update_last_checked_at';
 
@@ -165,6 +167,29 @@ class _UpdateScreenState extends State<UpdateScreen> {
                   color: colors.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.bold)),
+          actions: mandatory
+              ? null
+              : [
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: colors.textMuted),
+                    color: colors.bgCard,
+                    onSelected: (v) {
+                      if (v == 'history') {
+                        Navigator.push(
+                          context,
+                          AppTransitions.slideFade(const ReleaseHistoryScreen()),
+                        );
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'history',
+                        child: Text('Sürüm Geçmişi · Release History',
+                            style: TextStyle(color: colors.textPrimary)),
+                      ),
+                    ],
+                  ),
+                ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
