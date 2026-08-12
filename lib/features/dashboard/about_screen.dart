@@ -442,14 +442,16 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   static const _releaseNotes = [
-    'UPS, Proxmox ve AdGuard Home sunucularından biri tamamen '
-        'erişilemez hale geldiğinde artık bildirim alıyorsunuz ve ana '
-        'ekran widget\'ları sessizce eski veriyi göstermek yerine bunu '
-        'açıkça işaretliyor.',
-    'Ayarlar > Güncellemeler artık kendi sayfasında — sürüm notlarını, '
-        'dosya boyutunu ve güncelleme durumunu tek yerde gösteriyor.',
-    'Hakkında ekranı yeniden tasarlandı: bölümler arası ayrım netleşti, '
-        'gereksiz "Güncel" rozeti kaldırıldı.',
+    'Yeni: Wake-on-LAN ana ekran widget\'ı — kayıtlı cihazlarınızı '
+        'uygulamayı açmadan tek dokunuşla uyandırın.',
+    'Yeni: Sistem (Proxmox) widget\'ında hangi sunucuların '
+        'gösterileceğini seçebilirsiniz — widget\'a uzun basıp '
+        '"Yapılandır" deyin.',
+    'Telefonunuzun kendi interneti koptuğunda artık bunu sunucu '
+        'sorunuyla karıştırmıyoruz — tek, net bir bildirim alıyor ve ana '
+        'ekran widget\'ları bunu doğru şekilde gösteriyorsunuz.',
+    'Dört ana ekran widget\'ı (Proxmox, UPS, AdGuard, Wake-on-LAN) '
+        'görsel olarak daha tutarlı hale getirildi.',
   ];
 }
 

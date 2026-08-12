@@ -2,6 +2,49 @@
 
 All notable changes to MTools are documented in this file.
 
+## [3.2.1] — 2026-08-12
+
+### New: Wake-on-LAN widget
+
+- Added a home-screen widget for Wake-on-LAN — see your saved devices
+  and wake any of them (or all at once) with a single tap, without
+  opening the app.
+- The widget supports the same small/medium/large sizes as the other
+  three widgets, and can be configured (long-press → Configure) to
+  show only specific devices.
+
+### New: choose which servers appear in the Proxmox widget
+
+- The Proxmox/system home-screen widget can now be configured (when
+  you add it, or later via long-press → Configure) to show only
+  specific servers instead of all of them. You can add the widget
+  multiple times with a different server selection in each.
+
+### Reliability
+
+- MTools now tells the difference between "your phone has no internet"
+  and "a specific server is unreachable." Previously, losing your
+  phone's own WiFi/mobile signal could trigger three separate
+  "unreachable" notifications (one each for Proxmox, UPS, and AdGuard)
+  for what was really a single, unrelated problem. Now you get one
+  clear notification when your connection drops and one when it's
+  back, and the three widgets show "your device has no internet"
+  instead of guessing at the server's status.
+- The Proxmox and UPS home-screen widgets now tell "never set up" and
+  "set up but currently unreachable" apart, matching how the AdGuard
+  widget already worked — so an empty widget doesn't look like a
+  configuration you forgot to finish.
+
+### Design
+
+- Brought the Proxmox, UPS, AdGuard, and Wake-on-LAN widgets into
+  closer visual alignment: matching size breakpoints, touch target
+  sizes on the Wake-on-LAN buttons, and consistent colors/typography
+  across all four.
+- Fixed the Wake-on-LAN widget's "wake all" button so tapping it
+  repeatedly in quick succession doesn't resend packets to devices
+  that were just woken.
+
 ## [3.2.0] — 2026-08-08
 
 ### Reliability
