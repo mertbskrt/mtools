@@ -21,6 +21,9 @@ releases, see: [mertbskrt/mtools-releases](https://github.com/mertbskrt/mtools-r
   info.
 - **SSH Terminal** — direct terminal access to your saved servers.
 - **Wake on LAN** — remotely wake devices on your network.
+- **Home-screen widgets** — at-a-glance Proxmox/UPS/AdGuard status and
+  one-tap Wake on LAN, each configurable independently (e.g. choose which
+  Proxmox servers a given widget shows).
 - **Background monitoring and notifications** — push notifications based
   on thresholds you set (CPU/RAM/disk/UPS, etc.), with an in-app
   notification history.
