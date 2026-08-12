@@ -1,5 +1,6 @@
 package com.example.mtools_v2
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
@@ -38,6 +39,18 @@ class WolWidgetProvider : HomeWidgetProvider() {
         fun selectionKey(appWidgetId: Int) = "wol_widget_devices_$appWidgetId"
         fun cooldownKey(appWidgetId: Int, mac: String) = "wol_cooldown_${appWidgetId}_$mac"
 
+        /// ProxmoxWidgetProvider.configurePendingIntent ile aynı gerekçe:
+        /// "uzun bas → Yapılandır" bazı launcher'larda widget ilk eklendikten
+        /// sonra bir daha tetiklenmiyor — bu, garantili bir alternatif.
+        private fun configurePendingIntent(context: Context, widgetId: Int): PendingIntent {
+            val intent = Intent(context, WolWidgetConfigureActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+            return PendingIntent.getActivity(
+                context, widgetId, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
         /// Hem onUpdate/onAppWidgetOptionsChanged hem de ActionReceiver'ın
         /// gönderim sonrası anlık + gecikmeli (cooldown bitince) yenilemesi
         /// için companion'a alındı — ProxmoxWidgetProvider ile aynı desen.
@@ -75,6 +88,10 @@ class WolWidgetProvider : HomeWidgetProvider() {
             views.setOnClickPendingIntent(
                 R.id.widget_root_wol,
                 HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java),
+            )
+            views.setOnClickPendingIntent(
+                R.id.wol_widget_settings,
+                configurePendingIntent(context, widgetId),
             )
             appWidgetManager.updateAppWidget(widgetId, views)
         }

@@ -4,6 +4,8 @@ import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
@@ -11,6 +13,7 @@ import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import es.antonborri.home_widget.HomeWidgetPlugin
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,12 +40,14 @@ class ProxmoxWidgetConfigureActivity : Activity() {
     private val checkBoxes = mutableListOf<CheckBox>()
     private lateinit var statusText: TextView
 
-    companion object {
-        private const val COLOR_BG = 0xFF1A1A1A.toInt()
-        private const val COLOR_TEXT_PRIMARY = 0xFFE2E8F0.toInt()
-        private const val COLOR_TEXT_MUTED = 0xFF6B7280.toInt()
-        private const val COLOR_ACCENT = 0xFF4A9EFF.toInt()
-    }
+    // Sabit hex yerine widget'ların kendisiyle (ProxmoxWidgetProvider vb.)
+    // AYNI colors.xml token'ları — iki yerde ayrı ayrı tutulan ama sayısal
+    // olarak hep eşleşmesi gereken bir çift artık tek kaynaktan geliyor.
+    private val colorBg by lazy { ContextCompat.getColor(this, R.color.widget_bg) }
+    private val colorTextPrimary by lazy { ContextCompat.getColor(this, R.color.widget_text_primary) }
+    private val colorTextMuted by lazy { ContextCompat.getColor(this, R.color.widget_text_muted) }
+    private val colorAccent by lazy { ContextCompat.getColor(this, R.color.widget_primary) }
+    private val colorError by lazy { ContextCompat.getColor(this, R.color.widget_error) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,14 +76,14 @@ class ProxmoxWidgetConfigureActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(COLOR_BG)
+            setBackgroundColor(colorBg)
             val pad = dp(20)
             setPadding(pad, dp(32), pad, pad)
         }
 
         root.addView(TextView(this).apply {
             text = "Gösterilecek sunucular"
-            setTextColor(COLOR_TEXT_PRIMARY)
+            setTextColor(colorTextPrimary)
             textSize = 18f
         })
 
@@ -88,23 +93,23 @@ class ProxmoxWidgetConfigureActivity : Activity() {
                     "sunucunuzu ekleyin. Şimdilik tüm sunucular gösterilecek, " +
                     "widget'a daha sonra uzun basıp \"Yapılandır\" ile seçim " +
                     "yapabilirsiniz."
-                setTextColor(COLOR_TEXT_MUTED)
+                setTextColor(colorTextMuted)
                 textSize = 13f
                 setPadding(0, dp(12), 0, dp(24))
             })
-            root.addView(Button(this).apply {
-                text = "Tamam"
-                setOnClickListener { finishConfiguring(emptyList()) }
-            })
+            root.addView(saveButton(text = "Tamam") { finishConfiguring(emptyList()) })
             statusText = TextView(this)
-            return ScrollView(this).apply { addView(root) }
+            return ScrollView(this).apply {
+                setBackgroundColor(colorBg)
+                addView(root)
+            }
         }
 
         root.addView(TextView(this).apply {
             text = "Bu widget'ta hangi sunucuların görüneceğini seçin. Aynı " +
                 "widget'ı birden fazla eklerseniz her biri kendi seçimini " +
                 "korur."
-            setTextColor(COLOR_TEXT_MUTED)
+            setTextColor(colorTextMuted)
             textSize = 13f
             setPadding(0, dp(8), 0, dp(20))
         })
@@ -113,42 +118,71 @@ class ProxmoxWidgetConfigureActivity : Activity() {
         for (name in nodeNames) {
             val cb = CheckBox(this).apply {
                 text = name
-                setTextColor(COLOR_TEXT_PRIMARY)
+                setTextColor(colorTextPrimary)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    buttonTintList = ColorStateList.valueOf(colorAccent)
+                }
                 // Seçim daha önce hiç kaydedilmemişse (ilk kurulum ya da
                 // widget silinip yeniden eklendiği için yeni bir appWidgetId
                 // atanmışsa) varsayılan hepsi işaretli — kullanıcı hiç
                 // dokunmadan Kaydet'e basarsa mevcut "hepsini göster"
                 // davranışı korunur.
                 isChecked = existing?.contains(name) ?: true
-                setPadding(0, dp(6), 0, dp(6))
             }
             checkBoxes.add(cb)
-            root.addView(cb)
+            // Widget'ların kendi node/UPS/cihaz satırlarıyla aynı "kart"
+            // dili (widget_row_background: yuvarlatılmış, widget_bg_light
+            // zeminli yüzey) — çıplak bir checkbox listesi yerine.
+            root.addView(LinearLayout(this).apply {
+                setBackgroundResource(R.drawable.widget_row_background)
+                val padH = dp(12)
+                setPadding(padH, dp(4), padH, dp(4))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { bottomMargin = dp(8) }
+                addView(cb)
+            })
         }
 
         statusText = TextView(this).apply {
-            setTextColor(0xFFD95C5C.toInt())
+            setTextColor(colorError)
             textSize = 12f
             setPadding(0, dp(8), 0, 0)
         }
         root.addView(statusText)
 
-        root.addView(Button(this).apply {
-            text = "Kaydet"
-            setTextColor(COLOR_ACCENT)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(16), 0, 0)
-            setOnClickListener {
-                val selected = checkBoxes.filter { it.isChecked }.map { it.text.toString() }
-                if (selected.isEmpty()) {
-                    statusText.text = "En az bir sunucu seçmelisiniz."
-                } else {
-                    finishConfiguring(selected)
-                }
+        root.addView(saveButton(text = "Kaydet") {
+            val selected = checkBoxes.filter { it.isChecked }.map { it.text.toString() }
+            if (selected.isEmpty()) {
+                statusText.text = "En az bir sunucu seçmelisiniz."
+            } else {
+                finishConfiguring(selected)
             }
         })
 
-        return ScrollView(this).apply { addView(root) }
+        return ScrollView(this).apply {
+            setBackgroundColor(colorBg)
+            addView(root)
+        }
+    }
+
+    /// widget_configure_button_bg zeminli, widget_primary metinli tek tip
+    /// aksiyon butonu — "Tamam" (veri yok) ve "Kaydet" akışlarının ikisinde
+    /// de kullanılıyor, widget'ların kendi buton diliyle (widget_wol_button_bg)
+    /// aynı desende.
+    private fun saveButton(text: String, onClick: () -> Unit): Button = Button(this).apply {
+        this.text = text
+        setTextColor(colorAccent)
+        gravity = Gravity.CENTER
+        setBackgroundResource(R.drawable.widget_configure_button_bg)
+        minimumHeight = dp(48)
+        val layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(16) }
+        this.layoutParams = layoutParams
+        setOnClickListener { onClick() }
     }
 
     private fun readAvailableNodeNames(prefs: SharedPreferences): List<String> {

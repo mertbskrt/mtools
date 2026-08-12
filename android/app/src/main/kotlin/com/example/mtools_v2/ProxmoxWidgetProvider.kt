@@ -1,7 +1,9 @@
 package com.example.mtools_v2
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.View
@@ -53,6 +55,22 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
         /// Her widget örneğinin (appWidgetId) kendi node seçimi bu anahtar
         /// altında tutulur — bkz. ProxmoxWidgetConfigureActivity.
         fun selectionKey(appWidgetId: Int) = "proxmox_widget_nodes_$appWidgetId"
+
+        /// "Uzun bas → Yapılandır" bazı launcher'larda (uzun-basma menüsünde
+        /// widget'a özel bir "Yapılandır" seçeneği sunmayan/APPWIDGET_CONFIGURE
+        /// action'ını göndermeyen launcher'lar) widget ilk eklendikten SONRA
+        /// hiç tetiklenmiyor — bu, android:configure'a bağımlı kalmadan
+        /// ConfigureActivity'yi doğrudan bu appWidgetId ile açan garantili
+        /// bir alternatif. Açık (explicit) Intent olduğu için intent-filter
+        /// eşleşmesine ihtiyaç yok.
+        private fun configurePendingIntent(context: Context, widgetId: Int): PendingIntent {
+            val intent = Intent(context, ProxmoxWidgetConfigureActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+            return PendingIntent.getActivity(
+                context, widgetId, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
 
         /// Hem onUpdate/onAppWidgetOptionsChanged hem de yapılandırma
         /// ekranı kaydettikten sonra anında yenileme için companion'a
@@ -107,6 +125,10 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
             views.setOnClickPendingIntent(
                 R.id.widget_root_proxmox,
                 HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java),
+            )
+            views.setOnClickPendingIntent(
+                R.id.proxmox_widget_settings,
+                configurePendingIntent(context, widgetId),
             )
             appWidgetManager.updateAppWidget(widgetId, views)
         }

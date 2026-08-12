@@ -20,4 +20,22 @@
         <item name="android:colorBackground">#F7F7F8</item>
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <!-- Proxmox/WOL widget yapılandırma ekranları (ConfigureActivity) için.
+         Önceden Theme.DeviceDefault.Light kullanılıyordu ama Activity'nin
+         kendisi içeriği elle @color/widget_bg (koyu) ile boyuyordu — Light
+         temanın kendi windowBackground'ı (beyaz) ekranın Activity'nin
+         boyamadığı kısımlarında (ör. içerik ekranı doldurmadığında ScrollView
+         altında kalan alan, veya ilk çizim karesi) görünüyor, "yarı beyaz
+         yarı siyah" görünümüne yol açıyordu. windowBackground'ı doğrudan
+         tema seviyesinde @color/widget_bg yaparak bu boşluk kapatılıyor —
+         widget'ların kendisi zaten (sistem/uygulama temasından bağımsız)
+         hep bu sabit koyu paletle çizildiği için (bkz. colors.xml), bu ekran
+         da aynı sabit paleti kullanıyor. -->
+    <style name="WidgetConfigureTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/widget_bg</item>
+        <item name="android:colorBackground">@color/widget_bg</item>
+        <item name="android:statusBarColor">@color/widget_bg</item>
+        <item name="android:navigationBarColor">@color/widget_bg</item>
+    </style>
 </resources>
