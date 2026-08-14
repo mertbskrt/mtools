@@ -442,16 +442,16 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   static const _releaseNotes = [
-    'Yeni: Wake-on-LAN ana ekran widget\'ı — kayıtlı cihazlarınızı '
-        'uygulamayı açmadan tek dokunuşla uyandırın.',
-    'Yeni: Sistem (Proxmox) widget\'ında hangi sunucuların '
-        'gösterileceğini seçebilirsiniz — widget\'a uzun basıp '
-        '"Yapılandır" deyin.',
-    'Telefonunuzun kendi interneti koptuğunda artık bunu sunucu '
-        'sorunuyla karıştırmıyoruz — tek, net bir bildirim alıyor ve ana '
-        'ekran widget\'ları bunu doğru şekilde gösteriyorsunuz.',
-    'Dört ana ekran widget\'ı (Proxmox, UPS, AdGuard, Wake-on-LAN) '
-        'görsel olarak daha tutarlı hale getirildi.',
+    'Wake-on-LAN widget\'ındaki bir sorun düzeltildi — "Uyandır" butonu '
+        'bazı durumlarda paket gerçekte gönderilmediği halde başarılı '
+        'gösteriyordu, artık gönderim gerçekten doğrulanıyor.',
+    'İnternet bağlantınız koptuğunda, uygulama açıkken de artık doğru '
+        'bildirimi alıyorsunuz — önceden bu sadece uygulama arka '
+        'plandayken çalışıyordu.',
+    'Arka plan izleme servisinin nadir durumlarda çökme ihtimali '
+        'giderildi, izleme artık daha kararlı çalışıyor.',
+    'Güncelleme kontrolü sırasında oluşabilecek sessiz hatalar artık '
+        'kayıt altına alınıyor.',
   ];
 }
 

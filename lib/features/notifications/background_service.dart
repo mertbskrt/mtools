@@ -92,13 +92,27 @@ Future<void> initBackgroundService() async {
   await androidPlugin?.createNotificationChannel(alertsChannel);
   await androidPlugin?.createNotificationChannel(terminalChannel);
 
+  // initBackgroundService() her main() çalıştığında (her soğuk başlangıçta)
+  // koşulsuz çağrılıyordu — servis zaten çalışıyorsa (ör. native watchdog'un
+  // 5 saniyede bir kendiliğinden yeniden başlattığı, ya da süreç çökme
+  // sonrası kısa bir geçiş anındaki eski bir örnek) autoStart:true yine de
+  // startForegroundService()'i TEKRAR tetikliyordu — bu, halihazırda
+  // ayakta/geçiş halindeki bir servise karşı çakışan bir ikinci
+  // startForegroundService() çağrısına yol açıp Android'in "Service.
+  // startForeground() zamanında çağrılmadı" (ForegroundServiceDidNotStart-
+  // InTimeException) hatasıyla uygulamayı öldürmesine sebep olabiliyordu.
+  // Servis zaten çalışıyorsa autoStart'ı atlıyoruz — configure() yine de
+  // çağrılıyor (bildirim başlığı/kanalı gibi ayarları senkron tutmak için,
+  // bu native tarafta sadece bir SharedPreferences yazımı, zararsız).
+  final alreadyRunning = await service.isRunning();
+
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
       // Servis SADECE burada, uygulama açılışında başlatılır — Android'in
       // yeni bir foreground service başlatmaya izin verdiği tek güvenli an
       // budur. Bir daha asla start/stop edilmez (aşağıya bakınız).
-      autoStart: true,
+      autoStart: !alreadyRunning,
       isForegroundMode: true,
       notificationChannelId: 'mtools_foreground',
       // Tek satır, açıklama yok — mümkün olan en silik metin. Android,
@@ -214,14 +228,19 @@ void onStart(ServiceInstance service) async {
   final intervalSeconds = initialSettings['interval'] as int;
 
   Timer.periodic(Duration(seconds: intervalSeconds), (_) async {
-    // Uygulama ön plandayken canlı ekranlar zaten aynı veriyi çekiyor —
-    // burada tekrar sorgulamak hem gereksiz hem de çift bildirime yol açar.
+    // _guardConnectivity appInForeground'dan BAĞIMSIZ her turda çalışır —
+    // hem "İnternet Bağlantınız Yok/Geri Geldi" bildirimi hem de
+    // Proxmox/UPS/AdGuard widget'larına yazılan deviceOffline bayrağı bu
+    // fonksiyonun içinde üretiliyor, ve widget'lar ana ekranda uygulama
+    // açık/kapalı fark etmeksizin görünür oldukları için bu turun ön planda
+    // atlanması, kullanıcı uygulamayı açık bırakıp beklediği sürece hem
+    // bildirimi hem widget güncellemesini hiç üretmeme sonucunu doğuruyordu.
+    final online = await _guardConnectivity(plugin: plugin);
+    // Servis-özel sorgular (Proxmox/UPS/AdGuard) hâlâ SADECE arka planda
+    // çalışır — ön plandaki canlı ekranlar zaten aynı veriyi çekiyor, burada
+    // tekrar sorgulamak hem gereksiz hem de çift bildirime yol açar.
     if (appInForeground) return;
-    // Cihazın kendi interneti yoksa hiçbir alt servis (Proxmox/UPS/AdGuard)
-    // hiç denenmez — hem gereksiz batarya/veri tüketimini önler hem de her
-    // birinin kendi "ulaşılamıyor" bildirimini tek tek atmasını (asıl sorun
-    // tek: telefonun bağlantısı) engeller. Bkz. _guardConnectivity.
-    if (await _guardConnectivity(plugin: plugin)) {
+    if (online) {
       await _runCheck(plugin: plugin);
       await _refreshAdGuardWidget(plugin: plugin);
     }

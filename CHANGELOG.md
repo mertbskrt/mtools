@@ -2,6 +2,21 @@
 
 All notable changes to MTools are documented in this file.
 
+## [3.2.2] — 2026-08-14
+
+### Fixed
+
+- Fixed a Wake-on-LAN widget issue where the "Wake" button could show
+  success even when the packet wasn't actually sent — sending is now
+  properly confirmed before the button reports success.
+- When your internet connection drops, you now get the correct
+  notification even while the app is open (previously this only
+  worked while the app was in the background).
+- Fixed a rare background-service crash — monitoring is now more
+  stable.
+- Silent errors during update checks are now recorded, making them
+  easier to diagnose if they happen again.
+
 ## [3.2.1] — 2026-08-12
 
 ### New: Wake-on-LAN widget

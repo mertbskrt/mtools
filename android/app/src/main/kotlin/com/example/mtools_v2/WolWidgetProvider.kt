@@ -38,6 +38,12 @@ class WolWidgetProvider : HomeWidgetProvider() {
 
         fun selectionKey(appWidgetId: Int) = "wol_widget_devices_$appWidgetId"
         fun cooldownKey(appWidgetId: Int, mac: String) = "wol_cooldown_${appWidgetId}_$mac"
+        /// Paket GERÇEKTEN gönderilemediğinde (ör. NetworkOnMainThreadException,
+        /// ya da gerçek bir IO hatası) bu anahtar cooldownKey YERİNE set edilir
+        /// — "Gönderildi ✓" yalanı söylemek yerine dürüst bir "Gönderilemedi"
+        /// göstergesi, ve kilitlemiyor (hiçbir paket gitmediği için tekrar
+        /// denemeyi engellemenin bir faydası yok).
+        fun failedKey(appWidgetId: Int, mac: String) = "wol_failed_${appWidgetId}_$mac"
 
         /// ProxmoxWidgetProvider.configurePendingIntent ile aynı gerekçe:
         /// "uzun bas → Yapılandır" bazı launcher'larda widget ilk eklendikten
@@ -178,7 +184,9 @@ class WolWidgetProvider : HomeWidgetProvider() {
                     }
 
                     val cooldownUntil = prefs.getLong(cooldownKey(widgetId, mac), 0L)
+                    val failedUntil = prefs.getLong(failedKey(widgetId, mac), 0L)
                     val sending = now < cooldownUntil
+                    val failed = !sending && now < failedUntil
 
                     when {
                         sending -> {
@@ -190,6 +198,17 @@ class WolWidgetProvider : HomeWidgetProvider() {
                             // önler). ActionReceiver de aynı kontrolü ayrıca
                             // yapıyor (asıl güvence, olası eski render'a
                             // rağmen çift korumalı).
+                        }
+                        failed -> {
+                            // Paket GERÇEKTEN gitmediği için (bkz. failedKey)
+                            // kilitlemiyoruz — buton tıklanabilir kalıyor,
+                            // kullanıcı hemen tekrar deneyebilir.
+                            views.setTextViewText(BUTTON_IDS[i], "Gönderilemedi")
+                            views.setInt(BUTTON_IDS[i], "setBackgroundResource", R.drawable.widget_wol_button_failed_bg)
+                            views.setOnClickPendingIntent(
+                                BUTTON_IDS[i],
+                                WolWidgetActionReceiver.wakePendingIntent(context, widgetId, i, mac),
+                            )
                         }
                         method == "ssh" -> {
                             views.setTextViewText(BUTTON_IDS[i], "Uygulamada Aç")

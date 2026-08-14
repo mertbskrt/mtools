@@ -85,7 +85,7 @@ class WolWidgetActionReceiver : BroadcastReceiver() {
         /// wol_screen.dart _sendUdpMagicPacket ile birebir aynı format.
         private fun sendMagicPacket(mac: String, broadcastIp: String) {
             val cleanMac = mac.replace(Regex("[:\\-]"), "")
-            if (cleanMac.length != 12) return
+            require(cleanMac.length == 12) { "Geçersiz MAC adresi: $mac" }
             val macBytes = ByteArray(6) { i ->
                 cleanMac.substring(i * 2, i * 2 + 2).toInt(16).toByte()
             }
@@ -103,10 +103,26 @@ class WolWidgetActionReceiver : BroadcastReceiver() {
             }
         }
 
-        private fun markSentAndSchedule(context: Context, widgetId: Int, mac: String) {
+        /// Paket GERÇEKTEN gönderildiğinde çağrılır — cooldown kilidi başlar
+        /// ("Gönderildi ✓", art arda tıklamaya kapalı).
+        private fun markSent(context: Context, widgetId: Int, mac: String) {
             val prefs = HomeWidgetPlugin.getData(context)
             prefs.edit()
                 .putLong(WolWidgetProvider.cooldownKey(widgetId, mac), System.currentTimeMillis() + WolWidgetProvider.COOLDOWN_MS)
+                .remove(WolWidgetProvider.failedKey(widgetId, mac))
+                .apply()
+            scheduleRefresh(context, widgetId)
+        }
+
+        /// Paket GERÇEKTEN gönderilemediğinde (ör. NetworkOnMainThreadException,
+        /// gerçek bir IO hatası) çağrılır — kilitlemez (hiçbir paket gitmediği
+        /// için tekrar denemeyi engellemenin faydası yok), sadece geçici bir
+        /// "Gönderilemedi" göstergesi.
+        private fun markFailed(context: Context, widgetId: Int, mac: String) {
+            val prefs = HomeWidgetPlugin.getData(context)
+            prefs.edit()
+                .putLong(WolWidgetProvider.failedKey(widgetId, mac), System.currentTimeMillis() + WolWidgetProvider.COOLDOWN_MS)
+                .remove(WolWidgetProvider.cooldownKey(widgetId, mac))
                 .apply()
             scheduleRefresh(context, widgetId)
         }
@@ -137,70 +153,93 @@ class WolWidgetActionReceiver : BroadcastReceiver() {
         }
     }
 
+    /// DatagramSocket.send() network I/O yapıyor — BroadcastReceiver.onReceive
+    /// ana thread'de çalıştığı için burada DOĞRUDAN çağrılırsa Android
+    /// NetworkOnMainThreadException fırlatır (önceki sürümde bu istisna
+    /// sessizce yutuluyordu ve paket ASLA gitmediği halde widget "Gönderildi
+    /// ✓" gösteriyordu). goAsync() ile alıcının ömrünü uzatıp gerçek işi bir
+    /// arka plan thread'inde yapıyoruz; sistem, pendingResult.finish()
+    /// çağrılana kadar alıcıyı canlı tutuyor.
     override fun onReceive(context: Context, intent: Intent) {
         val widgetId = intent.getIntExtra(EXTRA_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
 
-        when (intent.action) {
-            ACTION_WAKE_ONE -> {
-                val mac = intent.getStringExtra(EXTRA_MAC) ?: return
-                val broadcastIp = intent.getStringExtra(EXTRA_BROADCAST_IP) ?: "255.255.255.255"
-                val prefs = HomeWidgetPlugin.getData(context)
-                val cooldownUntil = prefs.getLong(WolWidgetProvider.cooldownKey(widgetId, mac), 0L)
-                // Asıl güvence burada — render'ın butonu gizlemesi sadece
-                // görsel, eski bir çizimde tıklama yine de gelebilir.
-                if (System.currentTimeMillis() < cooldownUntil) return
+        val action = intent.action
+        val pendingResult = goAsync()
+        Thread {
+            try {
+                when (action) {
+                    ACTION_WAKE_ONE -> handleWakeOne(context, intent, widgetId)
+                    ACTION_WAKE_ALL -> handleWakeAll(context, widgetId)
+                }
+            } finally {
+                pendingResult.finish()
+            }
+        }.start()
+    }
 
-                try {
-                    sendMagicPacket(mac, broadcastIp)
-                } catch (e: Exception) {
-                    Log.w("MTools", "WOL widget: paket gönderilemedi: $e")
-                }
-                markSentAndSchedule(context, widgetId, mac)
-                renderNow(context, widgetId)
-            }
-            ACTION_WAKE_ALL -> {
-                val prefs = HomeWidgetPlugin.getData(context)
-                val raw = prefs.getString("wol_devices_json", null)
-                val selectionRaw = prefs.getString(WolWidgetProvider.selectionKey(widgetId), null)
-                val devices = try {
-                    if (raw != null) JSONArray(raw) else JSONArray()
-                } catch (_: Exception) {
-                    JSONArray()
-                }
-                val selected: Set<String>? = selectionRaw?.let {
-                    runCatching {
-                        val arr = JSONArray(it)
-                        (0 until arr.length()).map { i -> arr.getString(i) }.toSet()
-                    }.getOrNull()
-                }
-                val now = System.currentTimeMillis()
-                for (i in 0 until devices.length()) {
-                    val d = devices.getJSONObject(i)
-                    val name = d.optString("name", "")
-                    if (selected != null && !selected.contains(name)) continue
-                    if (d.optString("method", "both") == "ssh") continue
-                    val mac = d.optString("mac", "")
-                    if (mac.isEmpty()) continue
-                    // WAKE_ONE'daki aynı asıl güvence — "Hepsini Uyandır"
-                    // butonunun kendisi tek bir cihaza bağlı olmadığı için
-                    // (satır-bazlı butonlar gibi) görsel olarak
-                    // devre-dışı-gösterilemiyor, bu yüzden art arda basılırsa
-                    // her cihaz için ayrı ayrı cooldown burada kontrol
-                    // ediliyor — aksi halde çift tıklama tüm listeye tekrar
-                    // paket gönderirdi.
-                    val cooldownUntil = prefs.getLong(WolWidgetProvider.cooldownKey(widgetId, mac), 0L)
-                    if (now < cooldownUntil) continue
-                    try {
-                        sendMagicPacket(mac, d.optString("broadcastIp", "255.255.255.255"))
-                    } catch (e: Exception) {
-                        Log.w("MTools", "WOL widget (hepsi): $name gönderilemedi: $e")
-                    }
-                    markSentAndSchedule(context, widgetId, mac)
-                }
-                renderNow(context, widgetId)
-            }
+    private fun handleWakeOne(context: Context, intent: Intent, widgetId: Int) {
+        val mac = intent.getStringExtra(EXTRA_MAC) ?: return
+        val broadcastIp = intent.getStringExtra(EXTRA_BROADCAST_IP) ?: "255.255.255.255"
+        val prefs = HomeWidgetPlugin.getData(context)
+        val cooldownUntil = prefs.getLong(WolWidgetProvider.cooldownKey(widgetId, mac), 0L)
+        // Asıl güvence burada — render'ın butonu gizlemesi sadece
+        // görsel, eski bir çizimde tıklama yine de gelebilir.
+        if (System.currentTimeMillis() < cooldownUntil) return
+
+        val sent = try {
+            sendMagicPacket(mac, broadcastIp)
+            true
+        } catch (e: Exception) {
+            Log.w("MTools", "WOL widget: paket gönderilemedi: $e")
+            false
         }
+        if (sent) markSent(context, widgetId, mac) else markFailed(context, widgetId, mac)
+        renderNow(context, widgetId)
+    }
+
+    private fun handleWakeAll(context: Context, widgetId: Int) {
+        val prefs = HomeWidgetPlugin.getData(context)
+        val raw = prefs.getString("wol_devices_json", null)
+        val selectionRaw = prefs.getString(WolWidgetProvider.selectionKey(widgetId), null)
+        val devices = try {
+            if (raw != null) JSONArray(raw) else JSONArray()
+        } catch (_: Exception) {
+            JSONArray()
+        }
+        val selected: Set<String>? = selectionRaw?.let {
+            runCatching {
+                val arr = JSONArray(it)
+                (0 until arr.length()).map { i -> arr.getString(i) }.toSet()
+            }.getOrNull()
+        }
+        val now = System.currentTimeMillis()
+        for (i in 0 until devices.length()) {
+            val d = devices.getJSONObject(i)
+            val name = d.optString("name", "")
+            if (selected != null && !selected.contains(name)) continue
+            if (d.optString("method", "both") == "ssh") continue
+            val mac = d.optString("mac", "")
+            if (mac.isEmpty()) continue
+            // WAKE_ONE'daki aynı asıl güvence — "Hepsini Uyandır"
+            // butonunun kendisi tek bir cihaza bağlı olmadığı için
+            // (satır-bazlı butonlar gibi) görsel olarak
+            // devre-dışı-gösterilemiyor, bu yüzden art arda basılırsa
+            // her cihaz için ayrı ayrı cooldown burada kontrol
+            // ediliyor — aksi halde çift tıklama tüm listeye tekrar
+            // paket gönderirdi.
+            val cooldownUntil = prefs.getLong(WolWidgetProvider.cooldownKey(widgetId, mac), 0L)
+            if (now < cooldownUntil) continue
+            val sent = try {
+                sendMagicPacket(mac, d.optString("broadcastIp", "255.255.255.255"))
+                true
+            } catch (e: Exception) {
+                Log.w("MTools", "WOL widget (hepsi): $name gönderilemedi: $e")
+                false
+            }
+            if (sent) markSent(context, widgetId, mac) else markFailed(context, widgetId, mac)
+        }
+        renderNow(context, widgetId)
     }
 
     private fun renderNow(context: Context, widgetId: Int) {

@@ -18,6 +18,9 @@
          widget_row_background) aynı "colors.xml'e referans ver" deseninde. -->
     <color name="widget_wol_button_bg">#264A9EFF</color>
     <color name="widget_wol_button_sent_bg">#263DB885</color>
+    <!-- Paket GERÇEKTEN gönderilemediğinde ("Gönderilemedi") — widget_error'ın
+         aynı düşük-opaklık deseninde. -->
+    <color name="widget_wol_button_failed_bg">#26D95C5C</color>
     <!-- Proxmox/WOL yapılandırma ekranlarının (ConfigureActivity) "Kaydet"
          butonu zemini — widget_wol_button_bg ile aynı desen (widget_primary'nin
          düşük opaklıklı hâli), bu ekranlara özgü ayrı bir token olarak. -->

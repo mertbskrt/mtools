@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/mtools_mark.dart';
 import '../../core/theme/design_widgets.dart';
 import '../../core/utils/app_transitions.dart';
+import '../dashboard/error_log_service.dart';
 import 'update_service.dart';
 import 'update_manifest.dart';
 import 'update_installer.dart';
@@ -87,7 +88,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
       if (result.updateAvailable && result.manifest != null) {
         _fetchSize(result.manifest!.apkUrl);
       }
-    } catch (_) {
+    } catch (e) {
+      await ErrorLogService().log(
+        type: ErrorLogType.connection,
+        message: 'Güncelleme kontrolü başarısız',
+        detail: e.toString(),
+      );
       await _persistLastChecked(now);
       if (!mounted) return;
       setState(() {
