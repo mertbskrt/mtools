@@ -18,7 +18,9 @@ import '../../core/services/connectivity_provider.dart';
 import '../../core/utils/credential_sync.dart';
 import '../../core/utils/connection_target.dart';
 import '../../core/widgets/connection_issue_view.dart';
-import '../notifications/background_service.dart' show kNotificationAccent, hhmm;
+import '../notifications/notification_dispatch.dart';
+import '../notifications/notification_provider.dart';
+import '../notifications/notification_rule.dart';
 import 'terminal_session_manager.dart';
 
 class SshServer {
@@ -651,7 +653,7 @@ class _TerminalViewState extends State<_TerminalView> {
     );
   }
 
-  Future<void> _notify(String title, String body) async {
+  Future<void> _notify(int id, String title, String body) async {
     const details = AndroidNotificationDetails(
       'mtools_terminal',
       'Terminal Bildirimleri',
@@ -662,7 +664,7 @@ class _TerminalViewState extends State<_TerminalView> {
       color: kNotificationAccent,
     );
     await _plugin.show(
-        99, title, body, const NotificationDetails(android: details));
+        id, title, body, const NotificationDetails(android: details));
   }
 
   Future<void> _connect() async {
@@ -709,7 +711,7 @@ class _TerminalViewState extends State<_TerminalView> {
       session.done.then((_) async {
         TerminalSessionManager.instance.remove(_sessionKey);
         activeSession.connected.value = false;
-        await _notify('Terminal Bağlantısı Kesildi',
+        await _notify(98, 'Terminal Bağlantısı Kesildi',
             '${widget.server.name} · Oturum sonlandı · ${hhmm(DateTime.now())}');
       });
 
@@ -719,41 +721,45 @@ class _TerminalViewState extends State<_TerminalView> {
         _connected = true;
         _connecting = false;
       });
-      await _notify('Terminal Bağlandı',
+      await _notify(99, 'Terminal Bağlandı',
           '${widget.server.name} · ${widget.server.host} · ${hhmm(DateTime.now())}');
     } catch (e) {
       if (mounted) {
         final hasInternet =
             context.read<ConnectivityProvider>().hasInternet;
+        final kind = !hasInternet
+            ? ConnectionIssueKind.noInternet
+            : switch (classifyHost(widget.server.host)) {
+                ConnectionTarget.privateNetwork =>
+                  ConnectionIssueKind.privateNetwork,
+                ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
+                ConnectionTarget.external => ConnectionIssueKind.generic,
+              };
+        final (title, message) =
+            connectionIssueCopy(kind, widget.server.name, widget.server.host);
         setState(() {
           _connecting = false;
           _connected = false;
-          if (!hasInternet) {
-            _errorTitle = 'İnternet Bağlantınız Yok';
-            _error =
-                'Cihazınızın internet bağlantısı olmadan sunuculara bağlanılamaz.';
-            _errorIcon = Icons.wifi_off_rounded;
-          } else {
-            final kind = switch (classifyHost(widget.server.host)) {
-              ConnectionTarget.privateNetwork =>
-                ConnectionIssueKind.privateNetwork,
-              ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
-              ConnectionTarget.external => ConnectionIssueKind.generic,
-            };
-            final (title, message) = connectionIssueCopy(
-                kind, widget.server.name, widget.server.host);
-            _errorTitle = title;
-            _error = message.isNotEmpty ? message : 'Sunucuya bağlanılamadı.';
-            _errorIcon = switch (kind) {
-              ConnectionIssueKind.privateNetwork => Icons.lan_outlined,
-              ConnectionIssueKind.tailscale => Icons.vpn_lock_outlined,
-              ConnectionIssueKind.generic => Icons.wifi_off_rounded,
-            };
-          }
+          _errorTitle = title;
+          _error = message;
+          _errorIcon = switch (kind) {
+            ConnectionIssueKind.privateNetwork => Icons.lan_outlined,
+            ConnectionIssueKind.tailscale => Icons.vpn_lock_outlined,
+            ConnectionIssueKind.generic ||
+            ConnectionIssueKind.noInternet =>
+              Icons.wifi_off_rounded,
+          };
         });
+        await dispatchRuleNotification(
+          _plugin,
+          trigger: NotificationTrigger.terminalConnectionFailed,
+          rules: context.read<NotificationProvider>().rules,
+          id: 97,
+          title: 'Terminal Bağlantı Hatası',
+          body: '${widget.server.name} · $_errorTitle · ${hhmm(DateTime.now())}',
+          cooldownKey: 'terminal_connect_failed_${widget.server.host}',
+        );
       }
-      await _notify('Bağlantı Hatası',
-          '${widget.server.name} · $_errorTitle · ${hhmm(DateTime.now())}');
     }
   }
 

@@ -6,6 +6,7 @@ import '../../core/theme/design_widgets.dart';
 import '../../core/utils/app_transitions.dart';
 import '../../core/utils/connection_target.dart';
 import '../../core/widgets/connection_issue_view.dart';
+import '../../shared/widgets/connection_error_view.dart';
 import '../../core/widgets/operation_overlay.dart';
 import '../../core/widgets/confirm_dialog.dart';
 import '../../core/services/quick_auth_gate.dart';
@@ -124,37 +125,32 @@ class _ProxmoxScreenState extends State<ProxmoxScreen>
 
       final hasInternet =
           context.watch<ConnectivityProvider>().hasInternet;
-      // İnternet hiç yoksa bu ayrımın bir anlamı yok — eski davranış aynen
-      // korunuyor (home_screen'deki genel overlay zaten üstünü kaplar).
-      if (!hasInternet) {
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.cloud_off_rounded, color: colors.textMuted, size: 56),
-              const SizedBox(height: 16),
-              Text('Sunucuya bağlanılamıyor',
-                  style: TextStyle(color: colors.textSecondary, fontSize: 16)),
-              const SizedBox(height: 6),
-              Text('Ağ bağlantınızı kontrol edin',
-                  style: TextStyle(color: colors.textMuted, fontSize: 13)),
-            ],
-          ),
-        );
-      }
-
       final host =
           context.select<ProxmoxProvider, String?>((p) => p.lastFailedHost) ??
               '';
-      final kind = switch (classifyHost(host)) {
-        ConnectionTarget.privateNetwork => ConnectionIssueKind.privateNetwork,
-        ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
-        ConnectionTarget.external => ConnectionIssueKind.generic,
+      final kind = !hasInternet
+          ? ConnectionIssueKind.noInternet
+          : switch (classifyHost(host)) {
+              ConnectionTarget.privateNetwork =>
+                ConnectionIssueKind.privateNetwork,
+              ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
+              ConnectionTarget.external => ConnectionIssueKind.generic,
+            };
+      final (title, message) = connectionIssueCopy(kind, 'Proxmox', host);
+      final icon = switch (kind) {
+        ConnectionIssueKind.privateNetwork => Icons.lan_outlined,
+        ConnectionIssueKind.tailscale => Icons.vpn_lock_outlined,
+        ConnectionIssueKind.generic ||
+        ConnectionIssueKind.noInternet =>
+          Icons.wifi_off_rounded,
       };
-      return ConnectionIssueView(
-        kind: kind,
-        serviceName: 'Proxmox',
-        host: host,
+      final iconColor =
+          kind == ConnectionIssueKind.generic ? colors.error : null;
+      return ConnectionErrorView(
+        title: title,
+        message: message,
+        icon: icon,
+        iconColor: iconColor,
         onRetry: () => context.read<ProxmoxProvider>().manualRefresh(),
       );
     }

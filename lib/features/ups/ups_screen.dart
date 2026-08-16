@@ -180,25 +180,17 @@ class _UpsScreenState extends State<UpsScreen> {
                 ),
               );
             } else if (!connected) {
-              // İnternet hiç yoksa bu ayrımın bir anlamı yok — eski davranış
-              // (genel "Sunucuya bağlanılamıyor" mesajı, alarm tonu) aynen
-              // korunuyor.
-              final ConnectionIssueKind kind;
-              final String title;
-              final String message;
-              if (!hasInternet) {
-                kind = ConnectionIssueKind.generic;
-                title = 'Sunucuya bağlanılamıyor';
-                message = '';
-              } else {
-                kind = switch (classifyHost(server.host)) {
-                  ConnectionTarget.privateNetwork =>
-                    ConnectionIssueKind.privateNetwork,
-                  ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
-                  ConnectionTarget.external => ConnectionIssueKind.generic,
-                };
-                (title, message) = connectionIssueCopy(kind, 'UPS', server.host);
-              }
+              final kind = !hasInternet
+                  ? ConnectionIssueKind.noInternet
+                  : switch (classifyHost(server.host)) {
+                      ConnectionTarget.privateNetwork =>
+                        ConnectionIssueKind.privateNetwork,
+                      ConnectionTarget.tailscale =>
+                        ConnectionIssueKind.tailscale,
+                      ConnectionTarget.external => ConnectionIssueKind.generic,
+                    };
+              final (title, message) =
+                  connectionIssueCopy(kind, 'UPS', server.host);
               final isGeneric = kind == ConnectionIssueKind.generic;
               final issueColor = isGeneric ? colors.error : colors.textSecondary;
 

@@ -85,23 +85,31 @@ class _AdGuardScreenState extends State<AdGuardScreen>
     if (!provider.isConnected && !provider.isLoading && !provider.isStale) {
       final hasInternet =
           context.watch<ConnectivityProvider>().hasInternet;
-      // İnternet hiç yoksa bu ayrımın bir anlamı yok — eski/genel davranış
-      // aynen korunuyor (home_screen'deki tam-ekran overlay zaten üstünü
-      // kaplayacağı için bu görünmez, ama davranış değişmiyor).
-      if (!hasInternet) {
-        return ConnectionErrorView(onRetry: () => provider.refresh());
-      }
-
       final host = provider.lastFailedHost ?? '';
-      final kind = switch (classifyHost(host)) {
-        ConnectionTarget.privateNetwork => ConnectionIssueKind.privateNetwork,
-        ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
-        ConnectionTarget.external => ConnectionIssueKind.generic,
+      final kind = !hasInternet
+          ? ConnectionIssueKind.noInternet
+          : switch (classifyHost(host)) {
+              ConnectionTarget.privateNetwork =>
+                ConnectionIssueKind.privateNetwork,
+              ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
+              ConnectionTarget.external => ConnectionIssueKind.generic,
+            };
+      final (title, message) = connectionIssueCopy(kind, 'AdGuard', host);
+      final icon = switch (kind) {
+        ConnectionIssueKind.privateNetwork => Icons.lan_outlined,
+        ConnectionIssueKind.tailscale => Icons.vpn_lock_outlined,
+        ConnectionIssueKind.generic ||
+        ConnectionIssueKind.noInternet =>
+          Icons.wifi_off_rounded,
       };
-      return ConnectionIssueView(
-        kind: kind,
-        serviceName: 'AdGuard',
-        host: host,
+      final colors = context.appColors;
+      final iconColor =
+          kind == ConnectionIssueKind.generic ? colors.error : null;
+      return ConnectionErrorView(
+        title: title,
+        message: message,
+        icon: icon,
+        iconColor: iconColor,
         onRetry: () => provider.refresh(),
       );
     }

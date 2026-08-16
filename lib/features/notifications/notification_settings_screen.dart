@@ -881,6 +881,8 @@ class _CategorySection extends StatelessWidget {
         return Icons.shield_outlined;
       case 'Bağlantı':
         return Icons.signal_wifi_off_rounded;
+      case 'Terminal':
+        return Icons.terminal;
       default:
         return Icons.tune_outlined;
     }
@@ -902,6 +904,8 @@ class _CategorySection extends StatelessWidget {
         return 'Sunucu erişilebilirlik izleme';
       case 'Bağlantı':
         return 'Telefonunuzun kendi internet bağlantısı';
+      case 'Terminal':
+        return 'Terminal sekmesindeki SSH bağlantı denemeleri';
       default:
         return '';
     }

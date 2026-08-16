@@ -14,6 +14,8 @@ import '../dashboard/error_log_service.dart';
 import '../../core/utils/connection_target.dart';
 import '../../core/utils/deliberate_off_store.dart';
 import 'notification_rule.dart';
+import 'notification_dispatch.dart';
+export 'notification_dispatch.dart' show kNotificationAccent, hhmm;
 
 // ─── Proxmox task type sabitleri ──────────────────────────────────────────────
 // vzstart: normal start, vzrestore: backup'tan başlatma
@@ -30,16 +32,6 @@ const _vmRestartTypes = {'qmreboot'};
 
 const _mtoolsTokenId = 'MToolsV2';
 const _p = 'flutter.';
-
-/// Tüm bildirimlerde (uyarılar, terminal, test) kullanılan tek, sabit
-/// Android bildirim rengi (status bar ikon tonu) — kullanıcının seçtiği
-/// uygulama-içi temadan bağımsız, marka kimliği için sabit tutuluyor.
-const kNotificationAccent = Color(0xFF4E9C8C);
-
-/// Bildirim gövdelerindeki standart "HH:mm" damgası — tek yerden üretiliyor
-/// ki tüm bildirim tipleri aynı formatı kullansın.
-String hhmm(DateTime dt) =>
-    '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
 // Telefonun ağ arayüzü değişimi (ör. WiFi → mobil veri) gibi anlık kesintiler
 // de getNodes()'u sunucu gerçekten çökmüş gibi patlatabiliyor. Tek hatada
@@ -291,7 +283,9 @@ void onStart(ServiceInstance service) async {
 
 /// `_runCheck()`'in yerel `notify()` closure'ıyla aynı mantık — Proxmox/UPS
 /// dışında (ör. `_refreshAdGuardWidget`) da kullanılabilsin diye üst
-/// seviyeye çıkarıldı.
+/// seviyeye çıkarıldı. Gerçek gönderim mantığı artık `notification_dispatch.dart`'ta
+/// (ön plandan da — bkz. Terminal'in `terminalConnectionFailed`i — çağrılabilsin
+/// diye) — burası davranışı AYNEN koruyan ince bir delege.
 Future<void> _sendNotification(
   FlutterLocalNotificationsPlugin plugin,
   SharedPreferences prefs,
@@ -302,61 +296,18 @@ Future<void> _sendNotification(
   String body, {
   String? cooldownKey,
   int cooldownMinutes = 0,
-}) async {
-  // Bildirimler kapalıysa/sessiz saatlerdeyse veya bu elle widget
-  // yenilemesiyse gerçek bildirim gönderilmez — ama widget verisi (bu
-  // fonksiyonun dışında) her durumda güncellenir.
-  if (!notificationsAllowed) return;
-  if (cooldownKey != null && cooldownMinutes > 0) {
-    final lastStr = prefs.getString('notif_cooldown_$cooldownKey');
-    if (lastStr != null) {
-      final last = DateTime.tryParse(lastStr);
-      if (last != null &&
-          DateTime.now().difference(last).inMinutes < cooldownMinutes) {
-        return;
-      }
-    }
-    await prefs.setString(
-        'notif_cooldown_$cooldownKey', DateTime.now().toIso8601String());
-  }
-
-  history.insert(0, {
-    'title': title,
-    'body': body,
-    'time': DateTime.now().toIso8601String(),
-  });
-  if (history.length > 100) history.removeLast();
-
-  try {
-    await plugin.show(
+}) =>
+    sendDispatchedNotification(
+      plugin,
+      prefs,
+      notificationsAllowed,
+      history,
       id,
       title,
       body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'mtools_alerts',
-          'MTools Uyarılar',
-          channelDescription: 'Proxmox sistem uyarıları',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@drawable/ic_notification',
-          color: kNotificationAccent,
-        ),
-      ),
+      cooldownKey: cooldownKey,
+      cooldownMinutes: cooldownMinutes,
     );
-  } catch (e) {
-    debugPrint('[MTools BG] Bildirim gönderilemedi: $e');
-    // ErrorLogService bu izolatta boş bir _logs ile başlıyor — önce
-    // diskten yükleyip SONRA log() çağırmak, mevcut kayıtları _save()
-    // ile ezmemek için gerekli.
-    await ErrorLogService().load();
-    await ErrorLogService().log(
-      type: ErrorLogType.unknown,
-      message: 'Bildirim gönderilemedi',
-      detail: e.toString(),
-    );
-  }
-}
 
 Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async {
   final prefs = await SharedPreferences.getInstance();
@@ -1549,50 +1500,12 @@ Future<void> _refreshContainerNames(
       'names_refreshed_$nodeName', DateTime.now().toIso8601String());
 }
 
-bool _isQuietNow(Map<String, dynamic> notifSettings) {
-  final enabled = notifSettings['quietEnabled'] as bool;
-  if (!enabled) return false;
-  final start = notifSettings['quietStart'] as int;
-  final end = notifSettings['quietEnd'] as int;
-  final hour = DateTime.now().hour;
-  if (start < end) return hour >= start && hour < end;
-  return hour >= start || hour < end;
-}
+// Gerçek mantık artık notification_dispatch.dart'ta (ön plandan da
+// çağrılabilsin diye) — davranışı AYNEN koruyan ince delegeler.
+bool _isQuietNow(Map<String, dynamic> notifSettings) =>
+    isQuietNow(notifSettings);
 
-/// Genel bildirim ayarları (açık/kapalı, kontrol aralığı, sessiz saatler).
-/// shared_preferences bu arka plan servisinin ayrı FlutterEngine'i ile
-/// güvenilmez kaldığı için (bkz. NotificationProvider._syncRulesToBackgroundService
-/// yorumu) home_widget'ın depolama mekanizmasından okunuyor.
-Future<Map<String, dynamic>> _loadNotifSettings() async {
-  final raw = await HomeWidget.getWidgetData<String>('bg_notif_settings');
-  if (raw == null) {
-    return {
-      'serviceEnabled': true,
-      'interval': 30,
-      'quietEnabled': false,
-      'quietStart': 23,
-      'quietEnd': 7,
-    };
-  }
-  try {
-    final map = jsonDecode(raw) as Map<String, dynamic>;
-    return {
-      'serviceEnabled': map['serviceEnabled'] as bool? ?? true,
-      'interval': map['interval'] as int? ?? 30,
-      'quietEnabled': map['quietEnabled'] as bool? ?? false,
-      'quietStart': map['quietStart'] as int? ?? 23,
-      'quietEnd': map['quietEnd'] as int? ?? 7,
-    };
-  } catch (_) {
-    return {
-      'serviceEnabled': true,
-      'interval': 30,
-      'quietEnabled': false,
-      'quietStart': 23,
-      'quietEnd': 7,
-    };
-  }
-}
+Future<Map<String, dynamic>> _loadNotifSettings() => loadNotifSettings();
 
 bool _shouldCheckDiskTemp(SharedPreferences prefs) {
   final lastStr = prefs.getString('last_disk_temp_check');
@@ -1702,13 +1615,8 @@ int? _parseDiskTemp(Map<String, dynamic> smartData) {
 }
 
 NotificationRule? _findRule(
-    List<NotificationRule> rules, NotificationTrigger trigger) {
-  try {
-    return rules.firstWhere((r) => r.trigger.index == trigger.index);
-  } catch (_) {
-    return null;
-  }
-}
+        List<NotificationRule> rules, NotificationTrigger trigger) =>
+    findRule(rules, trigger);
 
 /// [host] iç ağ (RFC1918) adresliyse VE `networkChanged` kuralı açıksa true
 /// döner — bu durumda çağıran taraf genel "ulaşılamıyor" bildirimi yerine

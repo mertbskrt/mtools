@@ -35,6 +35,9 @@ enum NotificationTrigger {
   // geri gelme bildirimi AYNI tek trigger/toggle üzerinden yönetilir.
   connectivityLost,
   networkChanged,
+  // Terminal'den bir SSH sunucusuna bağlanma denemesi başarısız olduğunda —
+  // önceden kural motorunun tamamen dışında, kapatılamaz bir bildirimdi.
+  terminalConnectionFailed,
 }
 
 class NotificationRule {
@@ -311,6 +314,17 @@ class NotificationRule {
               'İç ağdaki bir sunucuya (Proxmox/UPS), interneti olduğunuz halde iç ağdan çıktığınız için ulaşılamadığında — genel "ulaşılamıyor" bildirimi yerine bunu gönderir',
           icon: Icons.wifi_tethering_error_rounded,
           category: 'Bağlantı',
+        ),
+        NotificationRule(
+          trigger: NotificationTrigger.terminalConnectionFailed,
+          enabled: true,
+          threshold: 0,
+          cooldownMinutes: 5,
+          label: 'Terminal Bağlantı Hatası',
+          description:
+              'Bir SSH sunucusuna bağlanma denemesi başarısız olduğunda bildir',
+          icon: Icons.terminal,
+          category: 'Terminal',
         ),
       ];
 }
