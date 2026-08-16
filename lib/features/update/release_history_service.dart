@@ -45,15 +45,17 @@ class ReleaseHistoryService {
 
   final Dio _dio = Dio();
 
-  Future<List<GithubReleaseInfo>> fetch() async {
+  Future<List<GithubReleaseInfo>> fetch({bool forceRefresh = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final cachedAtMs = prefs.getInt(_cacheAtKey);
-    final cachedJson = prefs.getString(_cacheKey);
-    if (cachedAtMs != null && cachedJson != null) {
-      final age = DateTime.now()
-          .difference(DateTime.fromMillisecondsSinceEpoch(cachedAtMs));
-      if (age < _cacheTtl) {
-        return _decode(cachedJson);
+    if (!forceRefresh) {
+      final cachedAtMs = prefs.getInt(_cacheAtKey);
+      final cachedJson = prefs.getString(_cacheKey);
+      if (cachedAtMs != null && cachedJson != null) {
+        final age = DateTime.now()
+            .difference(DateTime.fromMillisecondsSinceEpoch(cachedAtMs));
+        if (age < _cacheTtl) {
+          return _decode(cachedJson);
+        }
       }
     }
 

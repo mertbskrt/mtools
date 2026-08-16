@@ -31,13 +31,13 @@ class _ReleaseHistoryScreenState extends State<ReleaseHistoryScreen> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _failed = false;
     });
     try {
-      final releases = await _service.fetch();
+      final releases = await _service.fetch(forceRefresh: forceRefresh);
       if (!mounted) return;
       setState(() {
         _releases = releases;
@@ -73,6 +73,12 @@ class _ReleaseHistoryScreenState extends State<ReleaseHistoryScreen> {
           style: TextStyle(
               color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: colors.textSecondary),
+            onPressed: _loading ? null : () => _load(forceRefresh: true),
+          ),
+        ],
       ),
       body: _buildBody(colors),
     );

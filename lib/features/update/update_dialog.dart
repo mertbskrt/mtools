@@ -3,6 +3,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_transitions.dart';
 import 'update_installer.dart';
 import 'update_manifest.dart';
+import 'release_notes_lite.dart';
 
 /// Güncelleme mevcut olduğunda gösterilir. `mandatory` true ise diyalog ne
 /// geri tuşuyla ne de dışına dokunularak kapatılabilir — kullanıcı
@@ -121,11 +122,28 @@ class _UpdateDialogState extends State<UpdateDialog> {
                 ),
               ),
             if (m.releaseNotes.isNotEmpty)
-              Text(
-                m.releaseNotes,
-                style: TextStyle(
-                    color: colors.textSecondary, fontSize: 13, height: 1.5),
-              ),
+              ...parseReleaseNotesLite(m.releaseNotes).map((note) => note.type ==
+                      ReleaseNoteLineType.heading
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 6, bottom: 4),
+                      child: Text(
+                        note.text,
+                        style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        note.type == ReleaseNoteLineType.bullet
+                            ? '•  ${note.text}'
+                            : note.text,
+                        style: TextStyle(
+                            color: colors.textSecondary, fontSize: 13, height: 1.5),
+                      ),
+                    )),
             if (_downloading) ...[
               const SizedBox(height: 16),
               ClipRRect(

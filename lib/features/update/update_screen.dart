@@ -10,6 +10,7 @@ import 'update_service.dart';
 import 'update_manifest.dart';
 import 'update_installer.dart';
 import 'release_history_screen.dart';
+import 'release_notes_lite.dart';
 
 const _kLastCheckedKey = 'update_last_checked_at';
 
@@ -413,11 +414,7 @@ class _UpdateDetailCard extends StatelessWidget {
     final date = manifest.releaseDate;
     final dateStr =
         '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
-    final notes = manifest.releaseNotes
-        .split('\n')
-        .map((l) => l.trim())
-        .where((l) => l.isNotEmpty)
-        .toList();
+    final notes = parseReleaseNotesLite(manifest.releaseNotes);
 
     return Container(
       width: double.infinity,
@@ -463,35 +460,7 @@ class _UpdateDetailCard extends StatelessWidget {
                   fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
-            ...notes.map((note) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: colors.textMuted,
-                            borderRadius: BorderRadius.circular(AppRadius.full),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          note,
-                          style: TextStyle(
-                              color: colors.textSecondary,
-                              fontSize: 13,
-                              height: 1.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
+            ...notes.map((note) => _ReleaseNoteLine(note: note, colors: colors)),
           ],
           if (downloading) ...[
             const SizedBox(height: 16),
@@ -543,6 +512,52 @@ class _UpdateDetailCard extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.bold),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReleaseNoteLine extends StatelessWidget {
+  final ReleaseNoteLine note;
+  final AppThemeData colors;
+  const _ReleaseNoteLine({required this.note, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    if (note.type == ReleaseNoteLineType.heading) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 6),
+        child: Text(
+          note.text,
+          style: TextStyle(
+              color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colors.textMuted,
+                borderRadius: BorderRadius.circular(AppRadius.full),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              note.text,
+              style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.5),
             ),
           ),
         ],
