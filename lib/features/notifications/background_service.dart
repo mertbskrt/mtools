@@ -48,6 +48,8 @@ String hhmm(DateTime dt) =>
 // tur ile sınırlanıyor, gerçek kesinti de hâlâ hızlı yakalanıyor).
 const _kConsecutiveFailuresForOffline = 2;
 
+bool _connectivityCheckInProgress = false;
+
 // ─────────────────────────────────────────────
 // Servis başlatıcı
 // ─────────────────────────────────────────────
@@ -221,8 +223,14 @@ void onStart(ServiceInstance service) async {
     }
     // Arka plana geçildiği an bir kez hemen kontrol et — periyodik
     // zamanlayıcının ilk turunu (en fazla intervalSeconds) beklemeye gerek yok.
-    if (await _guardConnectivity(plugin: plugin)) {
-      await _runCheck(plugin: plugin);
+    if (_connectivityCheckInProgress) return;
+    _connectivityCheckInProgress = true;
+    try {
+      if (await _guardConnectivity(plugin: plugin)) {
+        await _runCheck(plugin: plugin);
+      }
+    } finally {
+      _connectivityCheckInProgress = false;
     }
   });
 
@@ -237,14 +245,20 @@ void onStart(ServiceInstance service) async {
     // açık/kapalı fark etmeksizin görünür oldukları için bu turun ön planda
     // atlanması, kullanıcı uygulamayı açık bırakıp beklediği sürece hem
     // bildirimi hem widget güncellemesini hiç üretmeme sonucunu doğuruyordu.
-    final online = await _guardConnectivity(plugin: plugin);
-    // Servis-özel sorgular (Proxmox/UPS/AdGuard) hâlâ SADECE arka planda
-    // çalışır — ön plandaki canlı ekranlar zaten aynı veriyi çekiyor, burada
-    // tekrar sorgulamak hem gereksiz hem de çift bildirime yol açar.
-    if (appInForeground) return;
-    if (online) {
-      await _runCheck(plugin: plugin);
-      await _refreshAdGuardWidget(plugin: plugin);
+    if (_connectivityCheckInProgress) return;
+    _connectivityCheckInProgress = true;
+    try {
+      final online = await _guardConnectivity(plugin: plugin);
+      // Servis-özel sorgular (Proxmox/UPS/AdGuard) hâlâ SADECE arka planda
+      // çalışır — ön plandaki canlı ekranlar zaten aynı veriyi çekiyor,
+      // burada tekrar sorgulamak hem gereksiz hem de çift bildirime yol açar.
+      if (appInForeground) return;
+      if (online) {
+        await _runCheck(plugin: plugin);
+        await _refreshAdGuardWidget(plugin: plugin);
+      }
+    } finally {
+      _connectivityCheckInProgress = false;
     }
   });
 
