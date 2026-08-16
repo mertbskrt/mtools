@@ -299,6 +299,7 @@ class _UpsScreenState extends State<UpsScreen> {
                   final data = provider.upsDataMap[key];
 
                   if (data == null) {
+                    if (!connected) return const SizedBox.shrink();
                     return Container(
                       key: ValueKey(key),
                       margin: const EdgeInsets.only(bottom: 10),

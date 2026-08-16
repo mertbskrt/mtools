@@ -108,6 +108,7 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
 
             val detailed = width >= 200 && perRowLarge >= 80
             val compact = width < 130 || (!detailed && perRowMedium < 55)
+            val richStats = !compact && !detailed && perRowMedium >= 45
             val layoutId = when {
                 detailed -> R.layout.widget_proxmox_large
                 compact -> R.layout.widget_proxmox_small
@@ -115,7 +116,7 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
             }
             val views = buildViews(
                 context, layoutId, raw, selectionRaw,
-                detailed = detailed, compactSummary = compact,
+                detailed = detailed, compactSummary = compact, richStats = richStats,
             )
             try {
                 val updatedAt = prefs.getLong("proxmox_updated_at", 0L)
@@ -140,6 +141,7 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
             selectionRaw: String?,
             detailed: Boolean,
             compactSummary: Boolean,
+            richStats: Boolean = false,
         ): RemoteViews {
             val views = RemoteViews(context.packageName, layoutId)
 
@@ -258,6 +260,7 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
                                 val tempPart = if (temp >= 0) " · $temp°C" else ""
                                 "CPU %$cpu · RAM %$mem · Disk %$disk$tempPart"
                             }
+                            richStats -> "CPU %$cpu · RAM %$mem · Disk %$disk"
                             else -> "CPU %$cpu · RAM %$mem"
                         },
                     )

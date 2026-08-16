@@ -115,6 +115,18 @@
                 android:maxLines="1"
                 android:ellipsize="end" />
 
+            <TextView
+                android:id="@+id/ups_detail_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:visibility="gone" />
+
             <ProgressBar
                 android:id="@+id/ups_bar_1"
                 style="@android:style/Widget.ProgressBar.Horizontal"
@@ -184,6 +196,18 @@
                 android:textSize="10sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/ups_detail_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:visibility="gone" />
 
             <ProgressBar
                 android:id="@+id/ups_bar_2"
@@ -255,6 +279,18 @@
                 android:maxLines="1"
                 android:ellipsize="end" />
 
+            <TextView
+                android:id="@+id/ups_detail_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:visibility="gone" />
+
             <ProgressBar
                 android:id="@+id/ups_bar_3"
                 style="@android:style/Widget.ProgressBar.Horizontal"
@@ -323,6 +359,18 @@
                 android:textSize="10sp"
                 android:maxLines="1"
                 android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/ups_detail_4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:visibility="gone" />
 
             <ProgressBar
                 android:id="@+id/ups_bar_4"

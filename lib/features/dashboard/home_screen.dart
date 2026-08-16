@@ -14,11 +14,28 @@ import '../terminal/terminal_screen.dart';
 import '../adguard/adguard_screen.dart';
 import '../ups/ups_screen.dart';
 import '../proxmox/proxmox_provider.dart';
+import '../ups/nut_provider.dart';
+import '../ups/nut_service.dart';
+import '../adguard/adguard_provider.dart';
 import '../../core/services/connectivity_provider.dart';
 import '../../shared/widgets/connection_error_view.dart';
 import '../update/update_service.dart';
 import '../update/update_dialog.dart';
 import 'dart:async';
+
+List<NutServer> _attemptedNutServers(NutProvider p) =>
+    p.servers.where((s) => !s.needsCredentials).toList();
+
+bool _nutConfigured(NutProvider p) => _attemptedNutServers(p).isNotEmpty;
+
+bool _nutFullyDown(NutProvider p) {
+  final attempted = _attemptedNutServers(p);
+  return attempted.isNotEmpty &&
+      attempted.every((s) => p.serverConnected[s.name] != true);
+}
+
+String _fmtHHmm(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 class HomeScreen extends StatefulWidget {
   final bool startTour;
@@ -209,6 +226,46 @@ class _HomeScreenState extends State<HomeScreen> {
         context.select<ProxmoxProvider, bool>((p) => p.isOperationInProgress);
     final currentTabId = tabs.isNotEmpty ? tabs[_currentIndex].id : '';
 
+    final proxmoxConfigured =
+        context.select<ProxmoxProvider, bool>((p) => p.isConfigured);
+    final proxmoxLastSuccessAt =
+        context.select<ProxmoxProvider, DateTime?>((p) => p.lastSuccessAt);
+    final proxmoxAllDeliberate = context.select<ProxmoxProvider, bool>((p) =>
+        p.unreachableNodeNames.isNotEmpty &&
+        p.unreachableNodeNames.every(p.isDeliberateOff));
+    final deliberateOffAt = context.select<ProxmoxProvider, DateTime?>((p) => p
+        .unreachableNodeNames
+        .map(p.deliberateOffAt)
+        .whereType<DateTime>()
+        .fold<DateTime?>(
+            null, (max, t) => max == null || t.isAfter(max) ? t : max));
+
+    final nutConfigured = context.select<NutProvider, bool>(_nutConfigured);
+    final nutFullyDown = context.select<NutProvider, bool>(_nutFullyDown);
+    final nutLastSuccessAt =
+        context.select<NutProvider, DateTime?>((p) => p.lastAnySuccessAt);
+
+    final adguardConfigured =
+        context.select<AdGuardProvider, bool>((p) => p.isConfigured);
+    final adguardFullyDown = context.select<AdGuardProvider, bool>(
+        (p) => p.isConfigured && !p.isConnected);
+    final adguardLastSuccessAt =
+        context.select<AdGuardProvider, DateTime?>((p) => p.lastSuccessAt);
+
+    final anyConfigured = proxmoxConfigured || nutConfigured || adguardConfigured;
+    final allConfiguredDown = anyConfigured &&
+        (!proxmoxConfigured || isOffline) &&
+        (!nutConfigured || nutFullyDown) &&
+        (!adguardConfigured || adguardFullyDown);
+    final isDeliberateVariant =
+        allConfiguredDown && proxmoxAllDeliberate && !nutFullyDown && !adguardFullyDown;
+    final overallLastSuccess = [
+      if (proxmoxConfigured) proxmoxLastSuccessAt,
+      if (nutConfigured) nutLastSuccessAt,
+      if (adguardConfigured) adguardLastSuccessAt,
+    ].whereType<DateTime>().fold<DateTime?>(
+        null, (max, t) => max == null || t.isAfter(max) ? t : max);
+
     return Scaffold(
       backgroundColor: colors.surface0,
       appBar: isOperationInProgress
@@ -330,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // gösterilir — internet tamamen yoksa aşağıdaki genel "Bağlantı
           // Yok" ekranı zaten tüm sekmelerin yerini alıyor, ikisi birden
           // gösterilip kafa karıştırmasın diye.
-          if (isOffline && hasInternet)
+          if (isOffline && hasInternet && !allConfiguredDown)
             _OfflineBanner(
               status: retryStatus,
               onRetry: () => context.read<ProxmoxProvider>().manualRefresh(),
@@ -358,6 +415,36 @@ class _HomeScreenState extends State<HomeScreen> {
                         onRetry: () => context
                             .read<ConnectivityProvider>()
                             .recheckNow(),
+                      ),
+                    ),
+                  ),
+                if (hasInternet && allConfiguredDown)
+                  Positioned.fill(
+                    child: Container(
+                      color: colors.surface0,
+                      child: ConnectionErrorView(
+                        icon: isDeliberateVariant
+                            ? Icons.power_settings_new_rounded
+                            : Icons.dns_rounded,
+                        iconColor:
+                            isDeliberateVariant ? colors.primary : colors.error,
+                        title: isDeliberateVariant
+                            ? 'Sistemler Kapalı'
+                            : 'Sunuculara Ulaşılamıyor',
+                        message: isDeliberateVariant
+                            ? 'Bilinçli olarak kapatıldı${deliberateOffAt != null ? ' · ${_fmtHHmm(deliberateOffAt)}' : ''}\nWOL ile ya da fiziksel olarak açabilirsiniz.'
+                            : 'Tüm sunucularınıza ulaşılamıyor${overallLastSuccess != null ? ' · Son erişim: ${_fmtHHmm(overallLastSuccess)}' : ''}\nTekrar deneniyor...',
+                        onRetry: isDeliberateVariant
+                            ? null
+                            : () {
+                                context.read<ProxmoxProvider>().manualRefresh();
+                                if (nutConfigured) {
+                                  context.read<NutProvider>().refresh();
+                                }
+                                if (adguardConfigured) {
+                                  context.read<AdGuardProvider>().refresh();
+                                }
+                              },
                       ),
                     ),
                   ),

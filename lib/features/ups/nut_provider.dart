@@ -21,6 +21,10 @@ class NutProvider extends ChangeNotifier {
   Map<String, String> serverErrors = {}; // her sunucunun hatası ayrı tutulur
   bool isLoading = false;
 
+  DateTime? get lastAnySuccessAt => upsDataMap.values
+      .map((d) => d.updatedAt)
+      .fold<DateTime?>(null, (max, t) => max == null || t.isAfter(max) ? t : max);
+
   Future<void> init() async {
     await _loadServers();
     if (servers.isNotEmpty) {

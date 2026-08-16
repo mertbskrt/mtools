@@ -13,8 +13,13 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/design_widgets.dart';
 import '../proxmox/proxmox_provider.dart';
 import '../../core/services/cloud_sync_service.dart';
+import '../../core/services/quick_auth_gate.dart';
+import '../../core/services/connectivity_provider.dart';
 import '../../core/utils/credential_sync.dart';
+import '../../core/utils/connection_target.dart';
+import '../../core/widgets/connection_issue_view.dart';
 import '../notifications/background_service.dart' show kNotificationAccent, hhmm;
+import 'terminal_session_manager.dart';
 
 class SshServer {
   String name;
@@ -230,7 +235,16 @@ class _TerminalScreenState extends State<TerminalScreen> {
     );
   }
 
-  void _openTerminal(SshServer server) {
+  Future<void> _openTerminal(SshServer server) async {
+    final gated =
+        await QuickAuthGate.isScopeGated(scopeKey: 'lock_scope_terminal');
+    if (gated) {
+      if (!context.mounted) return;
+      final ok = await QuickAuthGate.verify(context,
+          localizedReason: 'Bağlanmak için doğrulayın');
+      if (!ok) return;
+    }
+    if (!context.mounted) return;
     Navigator.push(
       context,
       AppTransitions.slideFade(_TerminalView(server: server)),
@@ -482,22 +496,59 @@ class _TerminalView extends StatefulWidget {
 }
 
 class _TerminalViewState extends State<_TerminalView> {
-  final _terminal = Terminal();
-  final _terminalController = TerminalController();
+  late Terminal _terminal;
+  late TerminalController _terminalController;
   final _plugin = FlutterLocalNotificationsPlugin();
   SSHClient? _client;
   SSHSession? _session;
   bool _connected = false;
   bool _connecting = true;
   String _error = '';
+  String _errorTitle = 'Bağlantı Başarısız';
+  IconData _errorIcon = Icons.error_outline;
   List<TerminalSnippet> _snippets = [];
+
+  bool _terminatedByUser = false;
+  late final String _sessionKey = TerminalSessionManager.instance
+      .keyFor(widget.server.host, widget.server.port, widget.server.username);
+  ActiveTerminalSession? _activeSession;
+  VoidCallback? _disconnectListener;
 
   @override
   void initState() {
     super.initState();
     _initNotifications();
-    _connect();
+    final existing = TerminalSessionManager.instance.get(_sessionKey);
+    if (existing != null && existing.connected.value) {
+      _terminal = existing.terminal;
+      _terminalController = existing.controller;
+      _client = existing.client;
+      _session = existing.session;
+      _connected = true;
+      _connecting = false;
+      _watchActiveSession(existing);
+    } else {
+      _terminal = Terminal();
+      _terminalController = TerminalController();
+      _connect();
+    }
     _loadSnippets();
+  }
+
+  void _watchActiveSession(ActiveTerminalSession session) {
+    _activeSession = session;
+    void listener() {
+      if (!mounted || session.connected.value) return;
+      setState(() {
+        _connected = false;
+        _errorTitle = 'Oturum Sonlandı';
+        _error = 'Bağlantı sunucu tarafından kapatıldı.';
+        _errorIcon = Icons.link_off_rounded;
+      });
+    }
+
+    session.connected.addListener(listener);
+    _disconnectListener = listener;
   }
 
   Future<void> _initNotifications() async {
@@ -635,50 +686,86 @@ class _TerminalViewState extends State<_TerminalView> {
       _session = await _client!.shell(
         pty: const SSHPtyConfig(width: 80, height: 24),
       );
+
+      final activeSession = ActiveTerminalSession(
+        client: _client!,
+        session: _session!,
+        terminal: _terminal,
+        controller: _terminalController,
+      );
+      TerminalSessionManager.instance.put(_sessionKey, activeSession);
+
+      final session = _session!;
+      final terminal = _terminal;
+      terminal.onOutput = (data) {
+        session.stdin.add(utf8.encode(data));
+      };
+      session.stdout.listen((data) {
+        terminal.write(utf8.decode(data, allowMalformed: true));
+      });
+      session.stderr.listen((data) {
+        terminal.write(utf8.decode(data, allowMalformed: true));
+      });
+      session.done.then((_) async {
+        TerminalSessionManager.instance.remove(_sessionKey);
+        activeSession.connected.value = false;
+        await _notify('Terminal Bağlantısı Kesildi',
+            '${widget.server.name} · Oturum sonlandı · ${hhmm(DateTime.now())}');
+      });
+
       if (!mounted) return;
+      _watchActiveSession(activeSession);
       setState(() {
         _connected = true;
         _connecting = false;
       });
       await _notify('Terminal Bağlandı',
           '${widget.server.name} · ${widget.server.host} · ${hhmm(DateTime.now())}');
-      _terminal.onOutput = (data) {
-        _session!.stdin.add(utf8.encode(data));
-      };
-      _session!.stdout.listen((data) {
-        _terminal.write(utf8.decode(data, allowMalformed: true));
-      });
-      _session!.stderr.listen((data) {
-        _terminal.write(utf8.decode(data, allowMalformed: true));
-      });
-      _session!.done.then((_) async {
-        if (mounted) {
-          setState(() {
-            _connected = false;
-            _error = 'Oturum sonlandı';
-          });
-        }
-        await _notify('Terminal Bağlantısı Kesildi',
-            '${widget.server.name} · Oturum sonlandı · ${hhmm(DateTime.now())}');
-      });
     } catch (e) {
       if (mounted) {
+        final hasInternet =
+            context.read<ConnectivityProvider>().hasInternet;
         setState(() {
           _connecting = false;
           _connected = false;
-          _error = e.toString();
+          if (!hasInternet) {
+            _errorTitle = 'İnternet Bağlantınız Yok';
+            _error =
+                'Cihazınızın internet bağlantısı olmadan sunuculara bağlanılamaz.';
+            _errorIcon = Icons.wifi_off_rounded;
+          } else {
+            final kind = switch (classifyHost(widget.server.host)) {
+              ConnectionTarget.privateNetwork =>
+                ConnectionIssueKind.privateNetwork,
+              ConnectionTarget.tailscale => ConnectionIssueKind.tailscale,
+              ConnectionTarget.external => ConnectionIssueKind.generic,
+            };
+            final (title, message) = connectionIssueCopy(
+                kind, widget.server.name, widget.server.host);
+            _errorTitle = title;
+            _error = message.isNotEmpty ? message : 'Sunucuya bağlanılamadı.';
+            _errorIcon = switch (kind) {
+              ConnectionIssueKind.privateNetwork => Icons.lan_outlined,
+              ConnectionIssueKind.tailscale => Icons.vpn_lock_outlined,
+              ConnectionIssueKind.generic => Icons.wifi_off_rounded,
+            };
+          }
         });
       }
       await _notify('Bağlantı Hatası',
-          '${widget.server.name} · ${e.toString().split('\n').first} · ${hhmm(DateTime.now())}');
+          '${widget.server.name} · $_errorTitle · ${hhmm(DateTime.now())}');
     }
   }
 
   @override
   void dispose() {
-    _terminalController.dispose();
-    _session?.close();
-    _client?.close();
+    final listener = _disconnectListener;
+    if (listener != null) {
+      _activeSession?.connected.removeListener(listener);
+    }
+    if (_terminatedByUser) {
+      _terminalController.dispose();
+    }
     super.dispose();
   }
 
@@ -823,8 +910,9 @@ class _TerminalViewState extends State<_TerminalView> {
                       TextButton(
                         onPressed: () {
                           Navigator.pop(ctx);
-                          _session?.close();
-                          _client?.close();
+                          TerminalSessionManager.instance
+                              .terminate(_sessionKey);
+                          _terminatedByUser = true;
                           Navigator.pop(context);
                         },
                         child: const Text('Sonlandır',
@@ -864,11 +952,11 @@ class _TerminalViewState extends State<_TerminalView> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline,
-                          color: Colors.red, size: 48),
+                      Icon(_errorIcon, color: Colors.red, size: 48),
                       const SizedBox(height: 16),
-                      const Text('Bağlantı Başarısız',
-                          style: TextStyle(
+                      Text(_errorTitle,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.bold)),
@@ -996,7 +1084,7 @@ class _TerminalViewState extends State<_TerminalView> {
                         controller: _terminalController,
                         theme: const TerminalTheme(
                           cursor: Color(0xFF00FF00),
-                          selection: Color(0xFF44475A),
+                          selection: Color(0x9944475A),
                           foreground: Color(0xFFF8F8F2),
                           background: Color(0xFF0D0D0D),
                           black: Color(0xFF000000),

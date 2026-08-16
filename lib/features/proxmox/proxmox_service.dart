@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'dart:io';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Proxmox API isteği 2xx dışında bir durum kodu döndürdüğünde fırlatılır.
 /// `validateStatus: (s) => true` sayesinde Dio hiçbir zaman kendiliğinden
@@ -12,6 +11,15 @@ class ProxmoxApiException implements Exception {
   final String message;
   final int? statusCode;
   ProxmoxApiException(this.message, {this.statusCode});
+  @override
+  String toString() => message;
+}
+
+class ProxmoxCommandUncertainException implements Exception {
+  final String message;
+  final bool likelyDelivered;
+  ProxmoxCommandUncertainException(this.message,
+      {required this.likelyDelivered});
   @override
   String toString() => message;
 }
@@ -138,27 +146,18 @@ class ProxmoxService {
 
   Future<void> startVM(String node, int vmid, {bool isLxc = false}) async {
     final type = isLxc ? 'lxc' : 'qemu';
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'intentional_$vmid', DateTime.now().toIso8601String());
     final res = await _dio.post('/nodes/$node/$type/$vmid/status/start');
     _ensureSuccess(res);
   }
 
   Future<void> stopVM(String node, int vmid, {bool isLxc = false}) async {
     final type = isLxc ? 'lxc' : 'qemu';
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'intentional_$vmid', DateTime.now().toIso8601String());
     final res = await _dio.post('/nodes/$node/$type/$vmid/status/stop');
     _ensureSuccess(res);
   }
 
   Future<void> rebootVM(String node, int vmid, {bool isLxc = false}) async {
     final type = isLxc ? 'lxc' : 'qemu';
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        'intentional_$vmid', DateTime.now().toIso8601String());
     final res = await _dio.post('/nodes/$node/$type/$vmid/status/reboot');
     _ensureSuccess(res);
   }
@@ -169,16 +168,36 @@ class ProxmoxService {
   }
 
   Future<void> rebootNode(String node) async {
-    final res = await _dio
-        .post('/nodes/$node/status', data: {'command': 'reboot'});
-    _ensureSuccess(res);
+    try {
+      final res = await _dio
+          .post('/nodes/$node/status', data: {'command': 'reboot'});
+      _ensureSuccess(res);
+    } on DioException catch (e) {
+      throw ProxmoxCommandUncertainException(
+        e.message ?? 'Bağlantı hatası',
+        likelyDelivered: _likelyDelivered(e),
+      );
+    }
   }
 
   Future<void> shutdownNode(String node) async {
-    final res = await _dio
-        .post('/nodes/$node/status', data: {'command': 'shutdown'});
-    _ensureSuccess(res);
+    try {
+      final res = await _dio
+          .post('/nodes/$node/status', data: {'command': 'shutdown'});
+      _ensureSuccess(res);
+    } on DioException catch (e) {
+      throw ProxmoxCommandUncertainException(
+        e.message ?? 'Bağlantı hatası',
+        likelyDelivered: _likelyDelivered(e),
+      );
+    }
   }
+
+  bool _likelyDelivered(DioException e) => ![
+        DioExceptionType.connectionTimeout,
+        DioExceptionType.badCertificate,
+        DioExceptionType.cancel,
+      ].contains(e.type);
 
   Future<void> mountDisk(String node, String disk) async {
     final res = await _dio.post('/nodes/$node/disks/directory',

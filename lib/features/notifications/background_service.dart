@@ -11,6 +11,8 @@ import '../proxmox/proxmox_service.dart';
 import '../ups/nut_service.dart';
 import '../adguard/adguard_service.dart';
 import '../dashboard/error_log_service.dart';
+import '../../core/utils/connection_target.dart';
+import '../../core/utils/deliberate_off_store.dart';
 import 'notification_rule.dart';
 
 // ─── Proxmox task type sabitleri ──────────────────────────────────────────────
@@ -365,6 +367,12 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
   final proxmoxServices = await _buildProxmoxServices(prefs, proxmoxServersRaw);
   final nutServices = await _buildNutServices(nutServersRaw);
 
+  var deliberateOffNodes = decodeDeliberateOffMap(
+      await HomeWidget.getWidgetData<String>('bg_deliberate_off_nodes'));
+  var deliberateOffContainers = decodeDeliberateOffMap(
+      await HomeWidget.getWidgetData<String>('bg_deliberate_off_containers'));
+  var deliberateOffDirty = false;
+
   if (proxmoxServices.isEmpty && nutServices.isEmpty) return;
 
   final rulesRaw =
@@ -425,18 +433,34 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
         // kesilirse diğer sağlıklı sunucuların node'ları yanlışlıkla
         // çevrimdışı işaretlenmesin.
         final knownNodes = prefs.getStringList(knownNodesKey) ?? const [];
+        final isNetworkChange = _isNetworkChangeTarget(svc.rawHost, rules);
 
         for (final nodeName in knownNodes) {
           final wasOnline =
               prefs.getString('node_online_state_$nodeName') != 'offline';
           if (wasOnline) {
-            final lastSeen =
-                prefs.getString('node_last_seen_$nodeName') ?? 'bilinmiyor';
-            final rule = _findRule(rules, NotificationTrigger.nodeOffline);
-            if (rule != null && rule.enabled) {
-              await notify(6, 'Sunucu Erişilemiyor',
-                  '$nodeName · Son erişim: $lastSeen',
-                  cooldownKey: 'node_offline_$nodeName', cooldownMinutes: 5);
+            final deliberate =
+                isDeliberateOffActive(deliberateOffNodes[nodeName]);
+            if (!deliberate && isNetworkChange) {
+              final rule =
+                  _findRule(rules, NotificationTrigger.networkChanged);
+              if (rule != null && rule.enabled) {
+                await notify(12, 'Ağ Bağlantısı Değişti',
+                    '$nodeName · İç ağa erişilemiyor, farklı bir ağdasınız · ${hhmm(DateTime.now())}',
+                    cooldownKey: 'node_network_changed_$nodeName',
+                    cooldownMinutes: rule.cooldownMinutes);
+              }
+              await prefs.setString('node_network_changed_$nodeName', 'true');
+            } else if (!deliberate) {
+              final lastSeen =
+                  prefs.getString('node_last_seen_$nodeName') ?? 'bilinmiyor';
+              final rule = _findRule(rules, NotificationTrigger.nodeOffline);
+              if (rule != null && rule.enabled) {
+                await notify(6, 'Sunucu Erişilemiyor',
+                    '$nodeName · Son erişim: $lastSeen',
+                    cooldownKey: 'node_offline_$nodeName',
+                    cooldownMinutes: 5);
+              }
             }
             await prefs.setString('node_online_state_$nodeName', 'offline');
           }
@@ -476,7 +500,9 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
         final prevState =
             prefs.getString('node_online_state_$nodeName') ?? 'online';
 
-        if (nodeStatus == 'offline' && prevState == 'online') {
+        if (nodeStatus == 'offline' &&
+            prevState == 'online' &&
+            !isDeliberateOffActive(deliberateOffNodes[nodeName])) {
           final rule = _findRule(rules, NotificationTrigger.nodeOffline);
           if (rule != null && rule.enabled) {
             await notify(6, 'Sunucu Çevrimdışı',
@@ -485,12 +511,43 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
           }
         }
 
-        if (nodeStatus == 'online' && prevState == 'offline') {
-          final rule = _findRule(rules, NotificationTrigger.nodeOnline);
-          if (rule != null && rule.enabled) {
-            await notify(9, 'Sunucu Tekrar Çevrimiçi',
-                '$nodeName · Erişilebilir · $nowStr',
-                cooldownKey: 'node_online_$nodeName');
+        final justReconnected = nodeStatus == 'online' && prevState == 'offline';
+
+        if (justReconnected) {
+          // Bir önceki kesinti "Ağ Bağlantısı Değişti" olarak işaretlenmişse
+          // (bkz. yukarıdaki catch bloğu), simetrik şekilde "geri geldi"
+          // bildirimi de aynı trigger üzerinden gönderilir — genel "Sunucu
+          // Tekrar Çevrimiçi" yerine.
+          final wasNetworkChange =
+              prefs.getString('node_network_changed_$nodeName') == 'true';
+          if (wasNetworkChange) {
+            final rule = _findRule(rules, NotificationTrigger.networkChanged);
+            if (rule != null && rule.enabled) {
+              await notify(13, 'Ağ Bağlantısı Geri Geldi',
+                  '$nodeName · İç ağa yeniden erişilebiliyor · $nowStr',
+                  cooldownKey: 'node_network_restored_$nodeName');
+            }
+            await prefs.remove('node_network_changed_$nodeName');
+          } else {
+            final rule = _findRule(rules, NotificationTrigger.nodeOnline);
+            if (rule != null && rule.enabled) {
+              await notify(9, 'Sunucu Tekrar Çevrimiçi',
+                  '$nodeName · Erişilebilir · $nowStr',
+                  cooldownKey: 'node_online_$nodeName');
+            }
+          }
+
+          if (deliberateOffNodes.remove(nodeName) != null) {
+            deliberateOffDirty = true;
+          }
+          final removedContainers = deliberateOffContainers.keys
+              .where((k) => k.startsWith('$nodeName::'))
+              .toList();
+          if (removedContainers.isNotEmpty) {
+            for (final k in removedContainers) {
+              deliberateOffContainers.remove(k);
+            }
+            deliberateOffDirty = true;
           }
         }
 
@@ -519,7 +576,10 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
             (vmStoppedRule?.enabled ?? false) ||
             (vmStartedRule?.enabled ?? false);
 
-        if (anyTaskRule) {
+        if (justReconnected) {
+          await prefs.setInt('last_task_time_$nodeName',
+              DateTime.now().millisecondsSinceEpoch ~/ 1000);
+        } else if (anyTaskRule) {
           try {
             // ── Önce isimleri güncelle, sonra task'ları işle ──────────────
             // Böylece yeni CT/VM'ler için de doğru isim kullanılır
@@ -567,8 +627,14 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
               // gösterilmez — sadece hedef, kısa detay ve saat.
               final failDetail = !isOK && status.isNotEmpty ? 'Hata: $status' : null;
 
+              final containerDeliberateOff = taskId.isNotEmpty &&
+                  isDeliberateOffActive(
+                      deliberateOffContainers['$nodeName::$taskId']);
+
               // ── Konteyner (LXC) olayları ────────────────────────────────
-              if (_ctStopTypes.contains(type) && taskId.isNotEmpty) {
+              if (_ctStopTypes.contains(type) &&
+                  taskId.isNotEmpty &&
+                  !containerDeliberateOff) {
                 if (ctStoppedRule != null && ctStoppedRule.enabled) {
                   final name = await _getCTName(prefs, nodeName, taskId);
                   await notify(
@@ -608,7 +674,9 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
               }
 
               // ── Sanal Makine (QEMU) olayları ────────────────────────────
-              if (_vmStopTypes.contains(type) && taskId.isNotEmpty) {
+              if (_vmStopTypes.contains(type) &&
+                  taskId.isNotEmpty &&
+                  !containerDeliberateOff) {
                 if (vmStoppedRule != null && vmStoppedRule.enabled) {
                   final name = await _getVMName(prefs, nodeName, taskId);
                   await notify(
@@ -776,12 +844,20 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
     debugPrint('[MTools BG] Proxmox genel hata: $e');
   }
 
+  if (deliberateOffDirty) {
+    await HomeWidget.saveWidgetData(
+        'bg_deliberate_off_nodes', encodeDeliberateOffMap(deliberateOffNodes));
+    await HomeWidget.saveWidgetData('bg_deliberate_off_containers',
+        encodeDeliberateOffMap(deliberateOffContainers));
+  }
+
   // ── UPS ──────────────────────────────────────────────────────────────────
   try {
     for (int svcIndex = 0; svcIndex < nutServices.length; svcIndex++) {
       final nutSvc = nutServices[svcIndex];
       final failCountKey = 'nut_fail_count_$svcIndex';
       final knownUnitsKey = 'nut_known_units_$svcIndex';
+      final isNetworkChange = _isNetworkChangeTarget(nutSvc.host, rules);
 
       List<String> upsList;
       try {
@@ -804,13 +880,25 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
           final wasReachable =
               prefs.getString('ups_bg_reachable_$upsKey') != 'false';
           if (wasReachable) {
-            final rule =
-                _findRule(rules, NotificationTrigger.upsUnreachable);
-            if (rule != null && rule.enabled) {
-              await notify(506, 'UPS\'e Ulaşılamıyor',
-                  '$unitName · Sunucuya bağlanılamıyor · ${hhmm(DateTime.now())}',
-                  cooldownKey: 'ups_unreachable_$upsKey',
-                  cooldownMinutes: rule.cooldownMinutes);
+            if (isNetworkChange) {
+              final rule =
+                  _findRule(rules, NotificationTrigger.networkChanged);
+              if (rule != null && rule.enabled) {
+                await notify(512, 'Ağ Bağlantısı Değişti',
+                    '$unitName · İç ağa erişilemiyor, farklı bir ağdasınız · ${hhmm(DateTime.now())}',
+                    cooldownKey: 'ups_network_changed_$upsKey',
+                    cooldownMinutes: rule.cooldownMinutes);
+              }
+              await prefs.setString('ups_network_changed_$upsKey', 'true');
+            } else {
+              final rule =
+                  _findRule(rules, NotificationTrigger.upsUnreachable);
+              if (rule != null && rule.enabled) {
+                await notify(506, 'UPS\'e Ulaşılamıyor',
+                    '$unitName · Sunucuya bağlanılamıyor · ${hhmm(DateTime.now())}',
+                    cooldownKey: 'ups_unreachable_$upsKey',
+                    cooldownMinutes: rule.cooldownMinutes);
+              }
             }
             await prefs.setString('ups_bg_reachable_$upsKey', 'false');
           }
@@ -845,13 +933,25 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
           final wasReachable =
               prefs.getString('ups_bg_reachable_$upsKey') != 'false';
           if (wasReachable) {
-            final rule =
-                _findRule(rules, NotificationTrigger.upsUnreachable);
-            if (rule != null && rule.enabled) {
-              await notify(506, 'UPS\'e Ulaşılamıyor',
-                  '$upsName · Sunucuya bağlanılamıyor · ${hhmm(DateTime.now())}',
-                  cooldownKey: 'ups_unreachable_$upsKey',
-                  cooldownMinutes: rule.cooldownMinutes);
+            if (isNetworkChange) {
+              final rule =
+                  _findRule(rules, NotificationTrigger.networkChanged);
+              if (rule != null && rule.enabled) {
+                await notify(512, 'Ağ Bağlantısı Değişti',
+                    '$upsName · İç ağa erişilemiyor, farklı bir ağdasınız · ${hhmm(DateTime.now())}',
+                    cooldownKey: 'ups_network_changed_$upsKey',
+                    cooldownMinutes: rule.cooldownMinutes);
+              }
+              await prefs.setString('ups_network_changed_$upsKey', 'true');
+            } else {
+              final rule =
+                  _findRule(rules, NotificationTrigger.upsUnreachable);
+              if (rule != null && rule.enabled) {
+                await notify(506, 'UPS\'e Ulaşılamıyor',
+                    '$upsName · Sunucuya bağlanılamıyor · ${hhmm(DateTime.now())}',
+                    cooldownKey: 'ups_unreachable_$upsKey',
+                    cooldownMinutes: rule.cooldownMinutes);
+              }
             }
             await prefs.setString('ups_bg_reachable_$upsKey', 'false');
           }
@@ -866,14 +966,29 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
 
         // Bu birim başarıyla yanıt verdi — daha önce "ulaşılamıyor"
         // işaretlenmişse şimdi geri döndüğünü bildir (nodeOnline deseniyle
-        // simetrik).
+        // simetrik). Kesinti "Ağ Bağlantısı Değişti" olarak işaretlenmişse
+        // (bkz. yukarıdaki catch blokları), geri dönüş bildirimi de aynı
+        // trigger üzerinden, genel "UPS'e Yeniden Ulaşıldı" yerine gönderilir.
         if (prefs.getString('ups_bg_reachable_$upsKey') == 'false') {
-          final reconnectRule =
-              _findRule(rules, NotificationTrigger.upsUnreachable);
-          if (reconnectRule != null && reconnectRule.enabled) {
-            await notify(507, 'UPS\'e Yeniden Ulaşıldı',
-                '$upsName · Bağlantı geri geldi · ${hhmm(DateTime.now())}',
-                cooldownKey: 'ups_reachable_$upsKey', cooldownMinutes: 0);
+          final wasNetworkChange =
+              prefs.getString('ups_network_changed_$upsKey') == 'true';
+          if (wasNetworkChange) {
+            final rule = _findRule(rules, NotificationTrigger.networkChanged);
+            if (rule != null && rule.enabled) {
+              await notify(513, 'Ağ Bağlantısı Geri Geldi',
+                  '$upsName · İç ağa yeniden erişilebiliyor · ${hhmm(DateTime.now())}',
+                  cooldownKey: 'ups_network_restored_$upsKey',
+                  cooldownMinutes: 0);
+            }
+            await prefs.remove('ups_network_changed_$upsKey');
+          } else {
+            final reconnectRule =
+                _findRule(rules, NotificationTrigger.upsUnreachable);
+            if (reconnectRule != null && reconnectRule.enabled) {
+              await notify(507, 'UPS\'e Yeniden Ulaşıldı',
+                  '$upsName · Bağlantı geri geldi · ${hhmm(DateTime.now())}',
+                  cooldownKey: 'ups_reachable_$upsKey', cooldownMinutes: 0);
+            }
           }
         }
         await prefs.setString('ups_bg_reachable_$upsKey', 'true');
@@ -887,11 +1002,12 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
         final runtimeMin = runtimeSec ~/ 60;
 
         // UpsData, foreground'daki NutProvider'ın widget'a yazdığı tam
-        // şemayla (runtimeLabel/load/temperature/voltage/statusLabel — bkz.
-        // WidgetService.updateUps) aynı alanları üretmek için burada da
-        // kullanılıyor. Bu alanlar eksik bırakılırsa uygulama kapalıyken
-        // arka plan servisi widget'ı güncellediğinde büyük/detaylı görünüm
-        // sessizce yük/voltaj/sıcaklık/durum bilgisini kaybediyordu.
+        // şemayla (runtimeLabel/load/temperature/inputVoltage/outputVoltage/
+        // statusLabel — bkz. WidgetService.updateUps) aynı alanları üretmek
+        // için burada da kullanılıyor. Bu alanlar eksik bırakılırsa uygulama
+        // kapalıyken arka plan servisi widget'ı güncellediğinde büyük/
+        // detaylı görünüm sessizce yük/voltaj/sıcaklık/durum bilgisini
+        // kaybediyordu.
         final upsData =
             UpsData(name: upsName, vars: vars, updatedAt: DateTime.now());
 
@@ -903,7 +1019,8 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
           'runtimeLabel': upsData.runtimeLabel,
           'load': upsLoad.round(),
           'temperature': upsTemp.round(),
-          'voltage': upsData.batteryVoltage,
+          'inputVoltage': upsData.inputVoltage,
+          'outputVoltage': upsData.outputVoltage,
           'statusLabel': upsData.statusLabel,
         });
 
@@ -1579,6 +1696,19 @@ NotificationRule? _findRule(
   }
 }
 
+/// [host] iç ağ (RFC1918) adresliyse VE `networkChanged` kuralı açıksa true
+/// döner — bu durumda çağıran taraf genel "ulaşılamıyor" bildirimi yerine
+/// "Ağ Bağlantısı Değişti"ni tercih etmeli. Bu fonksiyon sadece _runCheck()
+/// içinden çağrılır; o fonksiyon zaten _guardConnectivity() true dönünce
+/// (cihazın interneti VARKEN) tetiklendiği için burada cihaz-offline
+/// ihtimalini ayrıca kontrol etmeye gerek yok — connectivityLost o durumu
+/// zaten ayrıca (ve daha önce) ele alıyor.
+bool _isNetworkChangeTarget(String host, List<NotificationRule> rules) {
+  final rule = _findRule(rules, NotificationTrigger.networkChanged);
+  if (rule == null || !rule.enabled) return false;
+  return classifyHost(host) == ConnectionTarget.privateNetwork;
+}
+
 List<NotificationRule> _parseRules(String raw) {
   final defaults = NotificationRule.defaults();
   if (raw.isEmpty) return defaults;
@@ -1608,9 +1738,6 @@ List<NotificationRule> _parseRules(String raw) {
 //   100 = CT stop   200 = CT start   150 = CT restart
 //   300 = VM stop   400 = VM start   350 = VM restart
 //
-// Formül: (serverIndex * 10_000) + base + (vmid % 100)
-// serverIndex 0-9 arası, base 0-999 arası olduğu sürece çakışma olmaz.
-// vmid % 100: aynı sunucuda aynı anda 100'den az eşzamanlı olay olur.
 int _notifId(int serverIndex, int base, int vmid) {
-  return (serverIndex * 10000) + base + (vmid % 100);
+  return (serverIndex * 10000000) + (base * 10000) + (vmid % 10000);
 }

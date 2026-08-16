@@ -121,7 +121,8 @@ class WidgetService {
           'runtimeLabel': data.runtimeLabel,
           'load': data.load.round(),
           'temperature': data.temperature.round(),
-          'voltage': data.batteryVoltage,
+          'inputVoltage': data.inputVoltage,
+          'outputVoltage': data.outputVoltage,
           'statusLabel': data.statusLabel,
         };
       }).toList();

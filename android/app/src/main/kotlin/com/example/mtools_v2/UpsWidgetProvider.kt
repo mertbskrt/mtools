@@ -92,13 +92,14 @@ class UpsWidgetProvider : HomeWidgetProvider() {
 
         val detailed = width >= 200 && perRowLarge >= 85
         val compact = width < 130 || (!detailed && perRowMedium < 58)
+        val richDetail = !compact && (detailed || perRowMedium >= 66)
         val layoutId = when {
             detailed -> R.layout.widget_ups_large
             compact -> R.layout.widget_ups_small
             else -> R.layout.widget_ups
         }
 
-        val views = buildViews(context, layoutId, raw, detailed = detailed)
+        val views = buildViews(context, layoutId, raw, detailed = detailed, richDetail = richDetail)
         try {
             val updatedAt = HomeWidgetPlugin.getData(context).getLong("ups_updated_at", 0L)
             views.setTextViewText(R.id.ups_updated_text, WidgetFormat.relativeUpdatedAt(updatedAt))
@@ -111,7 +112,13 @@ class UpsWidgetProvider : HomeWidgetProvider() {
         appWidgetManager.updateAppWidget(widgetId, views)
     }
 
-    private fun buildViews(context: Context, layoutId: Int, raw: String?, detailed: Boolean): RemoteViews {
+    private fun buildViews(
+        context: Context,
+        layoutId: Int,
+        raw: String?,
+        detailed: Boolean,
+        richDetail: Boolean = false,
+    ): RemoteViews {
         val views = RemoteViews(context.packageName, layoutId)
 
         // AdGuard/Proxmox'la aynı 3-durumlu ayrım — bkz. ProxmoxWidgetProvider.
@@ -179,7 +186,8 @@ class UpsWidgetProvider : HomeWidgetProvider() {
             val runtimeLabel = unit.optString("runtimeLabel", "-")
             val load = unit.optInt("load", 0)
             val temperature = unit.optInt("temperature", 0)
-            val voltage = unit.optDouble("voltage", 0.0)
+            val inputVoltage = unit.optDouble("inputVoltage", 0.0)
+            val outputVoltage = unit.optDouble("outputVoltage", 0.0)
             val statusLabel = unit.optString("statusLabel", "-")
 
             try {
@@ -208,18 +216,34 @@ class UpsWidgetProvider : HomeWidgetProvider() {
                         else -> statusLabel
                     },
                 )
+                val inVText = if (inputVoltage > 0) "Giriş ${fmtVolt(inputVoltage)}V" else ""
+                val outVText = if (outputVoltage > 0) "Çıkış ${fmtVolt(outputVoltage)}V" else ""
+                val corePart = listOf("Yük %$load", inVText, outVText)
+                    .filter { it.isNotEmpty() }.joinToString(" · ")
+
                 if (detailed) {
                     val detailText = if (deviceOffline) {
                         "Cihazınızın interneti yok — son bilinen değerler gösteriliyor"
                     } else if (!reachable) {
                         "Sunucuya ulaşılamıyor — son bilinen değerler gösteriliyor"
                     } else {
-                        val voltageText = if (voltage > 0) String.format(Locale.US, "%.1fV", voltage) else ""
-                        val tempText = if (temperature > 0) "$temperature°C" else ""
-                        listOf(statusLabel, "Yük %$load", voltageText, tempText)
+                        val runtimePart =
+                            if (onBattery && runtimeLabel != "-") "kalan: $runtimeLabel" else ""
+                        val tempPart = if (temperature > 0) "$temperature°C" else ""
+                        listOf(statusLabel, corePart, runtimePart, tempPart)
                             .filter { it.isNotEmpty() }.joinToString(" · ")
                     }
                     trySetText(views, DETAIL_IDS[i], detailText)
+                } else if (richDetail) {
+                    val detailText = when {
+                        deviceOffline -> "Cihazınızın interneti yok"
+                        !reachable -> "Sunucuya ulaşılamıyor"
+                        else -> corePart
+                    }
+                    views.setViewVisibility(DETAIL_IDS[i], View.VISIBLE)
+                    trySetText(views, DETAIL_IDS[i], detailText)
+                } else {
+                    views.setViewVisibility(DETAIL_IDS[i], View.GONE)
                 }
             } catch (_: Exception) {
             }
@@ -245,4 +269,6 @@ class UpsWidgetProvider : HomeWidgetProvider() {
         } catch (_: Exception) {
         }
     }
+
+    private fun fmtVolt(v: Double): String = String.format(Locale.US, "%.1f", v)
 }

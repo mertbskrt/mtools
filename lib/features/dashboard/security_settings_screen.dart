@@ -17,6 +17,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   bool _lockEnabled = false;
   bool _biometricAvailable = false;
   String _lockType = 'none';
+  bool _powerOpsScope = false;
+  bool _terminalScope = false;
+  bool _killSwitch = false;
 
   @override
   void initState() {
@@ -33,6 +36,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       _lockEnabled = prefs.getBool('lock_enabled') ?? false;
       _lockType = prefs.getString('lock_type') ?? 'none';
       _biometricAvailable = canAuth && isSupported;
+      _powerOpsScope = prefs.getBool('lock_scope_power_ops') ?? false;
+      _terminalScope = prefs.getBool('lock_scope_terminal') ?? false;
+      _killSwitch = prefs.getBool('quick_auth_kill_switch') ?? false;
     });
   }
 
@@ -40,6 +46,32 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('lock_enabled', _lockEnabled);
     await prefs.setString('lock_type', _lockType);
+    await prefs.setBool('lock_scope_power_ops', _powerOpsScope);
+    await prefs.setBool('lock_scope_terminal', _terminalScope);
+    await prefs.setBool('quick_auth_kill_switch', _killSwitch);
+  }
+
+  Future<void> _handleAppEntryToggle(bool v) async {
+    if (v) {
+      final messenger = ScaffoldMessenger.of(context);
+      final warningColor = context.appColors.warning;
+      final isSupported = await _auth.isDeviceSupported();
+      if (!isSupported && context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Cihazınızda kayıtlı parmak izi veya şifre bulunamadı. Uygulama PIN\'i kullanabilirsiniz.'),
+            backgroundColor: warningColor,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+    setState(() {
+      _lockEnabled = v;
+      if (!v) _lockType = 'none';
+    });
+    _save();
   }
 
   void _showPinSetup() {
@@ -58,7 +90,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         builder: (ctx, setModalState) {
           final mColors = ctx.appColors;
 
-          Future<void> handleDigit(String digit) async {
+          void handleDigit(String digit) {
             setModalState(() {
               if (confirming) {
                 if (confirmPin.length < 4) confirmPin += digit;
@@ -66,36 +98,40 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                 if (pin.length < 4) pin += digit;
               }
             });
+          }
 
-            if (!confirming && pin.length == 4) {
+          Future<void> handleConfirm() async {
+            if (!confirming) {
+              if (pin.length != 4) return;
               setModalState(() => confirming = true);
-            } else if (confirming && confirmPin.length == 4) {
-              if (pin == confirmPin) {
-                final messenger = ScaffoldMessenger.of(context);
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('app_pin', pin);
-                if (mounted) setState(() => _lockType = 'app_pin');
-                await _save();
-                if (context.mounted) {
-                  Navigator.pop(ctx);
-                  messenger.showSnackBar(
-                    SnackBar(
-                        content: const Text('PIN kaydedildi'),
-                        backgroundColor: mColors.success),
-                  );
-                }
-              } else {
-                setModalState(() {
-                  confirmPin = '';
-                  confirming = false;
-                  pin = '';
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
+              return;
+            }
+            if (confirmPin.length != 4) return;
+            if (pin == confirmPin) {
+              final messenger = ScaffoldMessenger.of(context);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('app_pin', pin);
+              if (mounted) setState(() => _lockType = 'app_pin');
+              await _save();
+              if (context.mounted) {
+                Navigator.pop(ctx);
+                messenger.showSnackBar(
                   SnackBar(
-                      content: const Text('PIN\'ler eşleşmedi'),
-                      backgroundColor: mColors.error),
+                      content: const Text('PIN kaydedildi'),
+                      backgroundColor: mColors.success),
                 );
               }
+            } else {
+              setModalState(() {
+                confirmPin = '';
+                confirming = false;
+                pin = '';
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: const Text('PIN\'ler eşleşmedi'),
+                    backgroundColor: mColors.error),
+              );
             }
           }
 
@@ -146,7 +182,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                 GridView.count(
                   shrinkWrap: true,
                   crossAxisCount: 3,
-                  childAspectRatio: 1.5,
+                  childAspectRatio: 1.0,
                   children: [
                     ...List.generate(
                         9,
@@ -167,7 +203,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           });
                         }),
                     _PinButton(label: '0', onTap: () => handleDigit('0')),
-                    const SizedBox(),
+                    _PinConfirmButton(
+                      enabled:
+                          (confirming ? confirmPin.length : pin.length) == 4,
+                      onTap: handleConfirm,
+                    ),
                   ],
                 ),
               ],
@@ -206,27 +246,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
               ),
               value: _lockEnabled,
               activeThumbColor: colors.primary,
-              onChanged: (v) async {
-                if (v) {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final isSupported = await _auth.isDeviceSupported();
-                  if (!isSupported && context.mounted) {
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: const Text(
-                            'Cihazınızda kayıtlı parmak izi veya şifre bulunamadı. Uygulama PIN\'i kullanabilirsiniz.'),
-                        backgroundColor: colors.warning,
-                        duration: const Duration(seconds: 4),
-                      ),
-                    );
-                  }
-                }
-                setState(() {
-                  _lockEnabled = v;
-                  if (!v) _lockType = 'none';
-                });
-                _save();
-              },
+              onChanged: _handleAppEntryToggle,
             ),
           ),
           if (_lockEnabled) ...[
@@ -341,6 +361,34 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
               ),
             ],
           ],
+          const SizedBox(height: 24),
+          const SectionLabel('Kapsam'),
+          const SizedBox(height: 10),
+          _ScopeCard(
+            appEntryEnabled: _lockEnabled,
+            powerOpsEnabled: _powerOpsScope,
+            terminalEnabled: _terminalScope,
+            methodConfigured: _lockType != 'none',
+            onAppEntryChanged: _handleAppEntryToggle,
+            onPowerOpsChanged: (v) {
+              setState(() => _powerOpsScope = v);
+              _save();
+            },
+            onTerminalChanged: (v) {
+              setState(() => _terminalScope = v);
+              _save();
+            },
+          ),
+          const SizedBox(height: 24),
+          const SectionLabel('Acil Durum'),
+          const SizedBox(height: 10),
+          _EmergencyCard(
+            enabled: _killSwitch,
+            onChanged: (v) {
+              setState(() => _killSwitch = v);
+              _save();
+            },
+          ),
         ],
       ),
     );
@@ -416,6 +464,226 @@ class _LockOption extends StatelessWidget {
   }
 }
 
+class _ScopeCard extends StatelessWidget {
+  final bool appEntryEnabled;
+  final bool powerOpsEnabled;
+  final bool terminalEnabled;
+  final bool methodConfigured;
+  final ValueChanged<bool> onAppEntryChanged;
+  final ValueChanged<bool> onPowerOpsChanged;
+  final ValueChanged<bool> onTerminalChanged;
+
+  const _ScopeCard({
+    required this.appEntryEnabled,
+    required this.powerOpsEnabled,
+    required this.terminalEnabled,
+    required this.methodConfigured,
+    required this.onAppEntryChanged,
+    required this.onPowerOpsChanged,
+    required this.onTerminalChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface1,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: colors.hairline),
+      ),
+      child: Column(
+        children: [
+          _ScopeRow(
+            icon: Icons.login_rounded,
+            title: 'Uygulama Girişi',
+            subtitle: 'Uygulamayı açarken doğrulama iste',
+            value: appEntryEnabled,
+            enabled: true,
+            onChanged: onAppEntryChanged,
+          ),
+          Divider(height: 24, color: colors.hairline),
+          _ScopeRow(
+            icon: Icons.dns_outlined,
+            title: 'Sunucu İşlemleri',
+            subtitle: 'Başlat/durdur/yeniden başlat/sil öncesi doğrulama iste',
+            value: powerOpsEnabled,
+            enabled: methodConfigured,
+            onChanged: onPowerOpsChanged,
+          ),
+          Divider(height: 24, color: colors.hairline),
+          _ScopeRow(
+            icon: Icons.terminal_rounded,
+            title: 'Terminal Bağlantısı',
+            subtitle: 'SSH bağlantısı öncesi doğrulama iste',
+            value: terminalEnabled,
+            enabled: methodConfigured,
+            onChanged: onTerminalChanged,
+          ),
+          if (!methodConfigured) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: colors.surface2,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: colors.hairline),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: colors.textMuted, size: 13),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Kapsam seçeneklerini kullanmak için önce bir kilit türü belirleyin.',
+                      style: TextStyle(
+                          color: colors.textSecondary, fontSize: 11, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ScopeRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  const _ScopeRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final tint = value && enabled ? colors.primary : colors.textMuted;
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.4,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(icon, color: tint, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    style: TextStyle(color: colors.textSecondary, fontSize: 11)),
+              ],
+            ),
+          ),
+          Transform.scale(
+            scale: 0.85,
+            child: Switch(
+              value: value,
+              onChanged: enabled ? onChanged : null,
+              activeThumbColor: colors.primary,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmergencyCard extends StatelessWidget {
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  const _EmergencyCard({required this.enabled, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface1,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: enabled ? colors.warning : colors.hairline,
+          width: enabled ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: colors.warning.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(Icons.power_settings_new_rounded,
+                color: colors.warning, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Tüm Doğrulamaları Devre Dışı Bırak',
+                    style: TextStyle(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
+                const SizedBox(height: 3),
+                Text(
+                    enabled
+                        ? 'Açık — hiçbir işlem doğrulama istemiyor'
+                        : 'Kapsam ayarlarından bağımsız, acil durumda hızlıca kapatır',
+                    style: TextStyle(
+                        color: enabled ? colors.warning : colors.textSecondary,
+                        fontSize: 11)),
+              ],
+            ),
+          ),
+          Transform.scale(
+            scale: 0.85,
+            child: Switch(
+              value: enabled,
+              onChanged: onChanged,
+              activeThumbColor: colors.warning,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PinButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
@@ -428,10 +696,10 @@ class _PinButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.all(4),
+        margin: const EdgeInsets.all(6),
         decoration: BoxDecoration(
           color: colors.surface2,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
+          shape: BoxShape.circle,
           border: Border.all(color: colors.hairline),
         ),
         child: Center(
@@ -440,6 +708,36 @@ class _PinButton extends StatelessWidget {
                   color: colors.textPrimary,
                   fontSize: 22,
                   fontWeight: FontWeight.w600)),
+        ),
+      ),
+    );
+  }
+}
+
+class _PinConfirmButton extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onTap;
+  const _PinConfirmButton({required this.enabled, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        curve: AppMotion.curve,
+        margin: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: enabled ? colors.primary : colors.surface2,
+          shape: BoxShape.circle,
+          border: Border.all(
+              color: enabled ? colors.primary : colors.hairline),
+        ),
+        child: Center(
+          child: Icon(Icons.check_rounded,
+              color: enabled ? Colors.white : colors.textMuted, size: 24),
         ),
       ),
     );

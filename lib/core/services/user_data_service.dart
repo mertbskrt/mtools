@@ -27,6 +27,10 @@ class UserDataService {
     'app_pin',
     'lock_enabled',
     'lock_type',
+    'lock_scope_power_ops',
+    'lock_scope_terminal',
+    'quick_auth_kill_switch',
+    'guest_mode',
     // NOT: 'onboarding_seen' bilinçli olarak burada YOK — tanıtım/onboarding
     // cihaz bazında yalnızca bir kez gösterilmeli, sign-out/hesap değişimi
     // bunu sıfırlamamalı (yalnızca uygulama verisi silinirse/yeniden kurulumda

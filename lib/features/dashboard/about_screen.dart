@@ -229,17 +229,48 @@ class _AboutScreenState extends State<AboutScreen> {
                           title: 'Platform'),
                       const SizedBox(height: 14),
                       Text(
-                        'MTools, kendi Proxmox, AdGuard Home, UPS ve ağ '
-                        'cihazlarını yöneten kişiler için tasarlanmış, açık '
-                        'kaynaklı bir Android izleme ve yönetim uygulamasıdır. '
-                        'Flutter ile geliştirilmiştir; sunucu bilgileriniz ve '
-                        'kimlik bilgileriniz cihazınızda kalır.',
+                        'MTools, dağınık altyapı yönetim araçlarını tek bir '
+                        'mobil deneyimde birleştiren, kişisel ve kurumsal '
+                        'sunucu ortamları için tasarlanmış bir kontrol '
+                        'platformudur.',
                         style: TextStyle(
                           color: colors.textSecondary,
                           fontSize: 13,
                           height: 1.7,
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      ..._platformHighlights.map((item) => Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.only(left: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                left: BorderSide(
+                                  color: colors.primary.withValues(alpha: 0.35),
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            child: Text.rich(
+                              TextSpan(
+                                style: TextStyle(
+                                  color: colors.textSecondary,
+                                  fontSize: 12,
+                                  height: 1.5,
+                                ),
+                                children: [
+                                  TextSpan(
+                                    text: '${item.$1}: ',
+                                    style: TextStyle(
+                                      color: colors.textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  TextSpan(text: item.$2),
+                                ],
+                              ),
+                            ),
+                          )),
                     ],
                   ),
                 ),
@@ -441,17 +472,63 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
+  static const _platformHighlights = <(String, String)>[
+    (
+      'Merkezi İzleme',
+      'Sunucu, ağ ve güç altyapınızın durumunu tek ekrandan, gerçek '
+          'zamanlı olarak takip edin.',
+    ),
+    (
+      'Aktif Yönetim',
+      'Sistemlerinizi yalnızca gözlemlemekle kalmayın; kritik '
+          'operasyonları doğrudan uygulama üzerinden yürütün.',
+    ),
+    (
+      'Akıllı Bildirimler',
+      'Eşik bazlı, kural tabanlı bir bildirim motoruyla önemli '
+          'olaylardan anında haberdar olun; gereksiz uyarı yükünden '
+          'kaçının.',
+    ),
+    (
+      'Güvenlik Öncelikli Mimari',
+      'Kimlik bilgileriniz cihazınızdan hiçbir zaman ayrılmaz; '
+          'yapılandırmalarınız yalnızca gerektiğinde, güvenli şekilde '
+          'senkronize edilir.',
+    ),
+    (
+      'Sürekli Erişilebilirlik',
+      'Ana ekran widget\'ları ve arka plan izleme servisi sayesinde, '
+          'uygulamayı açmadan bile sistem durumunuzdan haberdar olun.',
+    ),
+    (
+      'Genişleyebilir Yapı',
+      'Platform, farklı altyapı bileşenlerini ve entegrasyonları '
+          'destekleyecek şekilde tasarlanmıştır.',
+    ),
+  ];
+
   static const _releaseNotes = [
-    'Wake-on-LAN widget\'ındaki bir sorun düzeltildi — "Uyandır" butonu '
-        'bazı durumlarda paket gerçekte gönderilmediği halde başarılı '
-        'gösteriyordu, artık gönderim gerçekten doğrulanıyor.',
-    'İnternet bağlantınız koptuğunda, uygulama açıkken de artık doğru '
-        'bildirimi alıyorsunuz — önceden bu sadece uygulama arka '
-        'plandayken çalışıyordu.',
-    'Arka plan izleme servisinin nadir durumlarda çökme ihtimali '
-        'giderildi, izleme artık daha kararlı çalışıyor.',
-    'Güncelleme kontrolü sırasında oluşabilecek sessiz hatalar artık '
-        'kayıt altına alınıyor.',
+    'Uygulama Kilidi eklendi — Güvenlik ayarları, güç işlemleri '
+        '(başlat/durdur/yeniden başlat/sil) ve Terminal sekmesi ayrı '
+        'ayrı PIN/biyometrik kilitle korunabiliyor.',
+    'Kayıtsız devam ettiğinizde artık bu tercih hatırlanıyor — '
+        'önceden uygulama her açılışta giriş ekranına dönüyordu.',
+    'Elektrik kesintisi sonrası: node kapatma/yeniden başlatma komutu '
+        'yanıtı kaybolduğunda artık yanlışlıkla "başarısız" göstermiyor; '
+        'bilinçli kapatılan makineler için gereksiz "erişilemiyor" '
+        'bildirimleri ve toplu/gecikmeli konteyner bildirimleri artık '
+        'gönderilmiyor; tüm sunuculara aynı anda ulaşılamadığında tüm '
+        'sekmelerde ortak, sakin bir durum ekranı gösteriliyor.',
+    'Wake-on-LAN: artık Terminal\'e kayıtlı her SSH sunucusu relay '
+        'olarak kullanılabiliyor; UDP paketlerinin mobil cihazlarda hiç '
+        'denenmemesi ve relay\'in yanlış sunucuya bağlanması sorunları '
+        'giderildi.',
+    'Sistem ve UPS ana ekran widget\'ları yeniden tasarlandı, UPS '
+        'widget\'ında artık giriş/çıkış voltajı da gösteriliyor.',
+    'Terminal: arka planda sızan SSH bağlantıları ve yeniden kullanılan '
+        'oturumlarda bağlantı kopması bildirimlerinin gecikmesi '
+        'giderildi; hata mesajları netleştirildi, metin seçimi '
+        'görünürlüğü düzeltildi, geri tuşu artık bağlantıyı kapatmıyor.',
   ];
 }
 

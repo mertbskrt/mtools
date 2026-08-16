@@ -5,6 +5,8 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/design_widgets.dart';
 import '../../core/utils/connection_target.dart';
 import '../../core/widgets/operation_overlay.dart';
+import '../../core/widgets/confirm_dialog.dart';
+import '../../core/services/quick_auth_gate.dart';
 import '../proxmox/proxmox_provider.dart';
 import '../../shared/models/alias_provider.dart';
 import '../dashboard/proxmox_connection_screen.dart';
@@ -631,13 +633,7 @@ class _SystemScreenState extends State<SystemScreen> {
       );
     }
 
-    if (nodes.isEmpty && !isInitialLoad && !hasError) {
-      return Center(
-          child: Text('Makine bulunamadı',
-              style: TextStyle(color: colors.textSecondary)));
-    }
-
-    if (isInitialLoad || (nodes.isEmpty && hasError)) {
+    if (!provider.isConfigured) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -655,6 +651,82 @@ class _SystemScreenState extends State<SystemScreen> {
                   context, AppTransitions.slideFade(const ProxmoxConnectionScreen())),
               icon: const Icon(Icons.add, color: Colors.white, size: 18),
               label: const Text('Sunucu Ekle',
+                  style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.primary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (isInitialLoad) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.5, color: colors.primary),
+            ),
+            const SizedBox(height: 14),
+            Text('Yükleniyor...',
+                style: TextStyle(color: colors.textMuted, fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    if (nodes.isEmpty && hasError) {
+      final unreachable = provider.unreachableNodeNames;
+      final allDeliberate = unreachable.isNotEmpty &&
+          unreachable.every(provider.isDeliberateOff);
+      final lastSuccessAt = provider.lastSuccessAt;
+      final lastSuccessStr = lastSuccessAt == null
+          ? null
+          : '${lastSuccessAt.hour.toString().padLeft(2, '0')}:${lastSuccessAt.minute.toString().padLeft(2, '0')}';
+
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+                allDeliberate
+                    ? Icons.power_settings_new_rounded
+                    : Icons.dns_rounded,
+                color: allDeliberate ? colors.primary : colors.error,
+                size: 64),
+            const SizedBox(height: 16),
+            Text(
+                allDeliberate
+                    ? 'Sunucu Bilinçli Olarak Kapatıldı'
+                    : 'Sunucu(lar)a Şu An Ulaşılamıyor',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.textSecondary, fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(
+                allDeliberate
+                    ? 'WOL ile ya da fiziksel olarak açabilirsiniz.'
+                    : (provider.retryStatus ?? 'Bağlantı kontrol ediliyor...'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.textMuted, fontSize: 13)),
+            if (lastSuccessStr != null) ...[
+              const SizedBox(height: 4),
+              Text('Son erişim: $lastSuccessStr',
+                  style: TextStyle(color: colors.textMuted, fontSize: 12)),
+            ],
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => provider.manualRefresh(),
+              icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
+              label: const Text('Tekrar Dene',
                   style: TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: colors.primary,
@@ -1256,30 +1328,18 @@ class _NodeCard extends StatelessWidget {
     required String confirmLabel,
     required Future<void> Function() onConfirm,
   }) async {
-    final confirmed = await appShowDialog<bool>(
+    final gated =
+        await QuickAuthGate.isScopeGated(scopeKey: 'lock_scope_power_ops');
+    if (!context.mounted) return;
+    final ok = await showAppConfirmDialog(
       context: context,
-      builder: (dctx) => AlertDialog(
-        backgroundColor: colors.surface1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-        title: Text(title, style: TextStyle(color: colors.textPrimary)),
-        content: Text(message,
-            style: TextStyle(color: colors.textSecondary, fontSize: 13)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dctx, false),
-            child:
-                Text('İptal', style: TextStyle(color: colors.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dctx, true),
-            child: Text(confirmLabel,
-                style: TextStyle(
-                    color: colors.error, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel,
+      requireAuth: gated,
+      authReason: 'İşlemi onaylamak için doğrulayın',
     );
-    if (confirmed == true) await onConfirm();
+    if (ok) await onConfirm();
   }
 
   PopupMenuItem<String> _powerMenuItem({

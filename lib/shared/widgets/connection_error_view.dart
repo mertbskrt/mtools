@@ -9,17 +9,22 @@ class ConnectionErrorView extends StatelessWidget {
   final String title;
   final String message;
   final VoidCallback? onRetry;
+  final IconData icon;
+  final Color? iconColor;
 
   const ConnectionErrorView({
     super.key,
     this.title = 'Bağlantı Yok',
     this.message = 'Bağlantınızı kontrol edin',
     this.onRetry,
+    this.icon = Icons.wifi_off_rounded,
+    this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final accent = iconColor ?? colors.error;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
@@ -31,12 +36,10 @@ class ConnectionErrorView extends StatelessWidget {
               height: 72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: colors.error.withValues(alpha: 0.1),
-                border:
-                    Border.all(color: colors.error.withValues(alpha: 0.3)),
+                color: accent.withValues(alpha: 0.1),
+                border: Border.all(color: accent.withValues(alpha: 0.3)),
               ),
-              child: Icon(Icons.wifi_off_rounded,
-                  color: colors.error, size: 32),
+              child: Icon(icon, color: accent, size: 32),
             ),
             const SizedBox(height: 20),
             Text(

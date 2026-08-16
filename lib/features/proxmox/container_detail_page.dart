@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../core/utils/app_transitions.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/design_widgets.dart';
 import '../../core/widgets/operation_overlay.dart';
+import '../../core/widgets/confirm_dialog.dart';
+import '../../core/services/quick_auth_gate.dart';
 import 'proxmox_provider.dart';
 
 class ContainerDetailPage extends StatefulWidget {
@@ -185,37 +186,47 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
     }
   }
 
-  void _confirmDelete(AppThemeData colors) {
+  Future<void> _confirmDelete(AppThemeData colors) async {
     final name = widget.item['name'] ?? '';
-    appShowDialog(
+    final gated = await QuickAuthGate.isScopeGated(
+        scopeKey: 'lock_scope_power_ops');
+    if (!mounted) return;
+    final ok = await showAppConfirmDialog(
       context: context,
-      builder: (dctx) => AlertDialog(
-        backgroundColor: colors.surface1,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-        title:
-            Text('Emin misiniz?', style: TextStyle(color: colors.textPrimary)),
-        content: Text('$name silinecek. Bu işlem geri alınamaz.',
-            style: TextStyle(color: colors.textSecondary, fontSize: 13)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dctx),
-              child:
-                  Text('İptal', style: TextStyle(color: colors.textSecondary))),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dctx);
-              _doAction(() => widget.provider.deleteContainer(
-                  widget.nodeName, widget.item['vmid'] as int,
-                  isLxc: widget.isLxc));
-            },
-            child: Text('Sil',
-                style: TextStyle(
-                    color: colors.error, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+      title: 'Emin misiniz?',
+      message: '$name silinecek. Bu işlem geri alınamaz.',
+      confirmLabel: 'Sil',
+      requireAuth: gated,
+      authReason: 'Silmeyi onaylamak için doğrulayın',
     );
+    if (!ok) return;
+    _doAction(() => widget.provider.deleteContainer(
+        widget.nodeName, widget.item['vmid'] as int,
+        isLxc: widget.isLxc));
+  }
+
+  Future<void> _confirmPowerAction(AppThemeData colors,
+      {required String message,
+      required String confirmLabel,
+      required Future<void> Function() onConfirm}) async {
+    final gated = await QuickAuthGate.isScopeGated(
+        scopeKey: 'lock_scope_power_ops');
+    if (!gated) {
+      onConfirm();
+      return;
+    }
+    if (!mounted) return;
+    final ok = await showAppConfirmDialog(
+      context: context,
+      title: 'Emin misiniz?',
+      message: message,
+      confirmLabel: confirmLabel,
+      isDestructive: false,
+      requireAuth: true,
+      authReason: 'İşlemi onaylamak için doğrulayın',
+    );
+    if (!ok) return;
+    onConfirm();
   }
 
   @override
@@ -457,9 +468,14 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
                   icon: Icons.restart_alt,
                   label: 'Yeniden Başlat',
                   color: colors.warning,
-                  onTap: () => _doAction(() => widget.provider.rebootContainer(
-                      widget.nodeName, vmid,
-                      isLxc: widget.isLxc)),
+                  onTap: () => _confirmPowerAction(
+                    colors,
+                    message: '${widget.item['name'] ?? ''} yeniden başlatılacak.',
+                    confirmLabel: 'Yeniden Başlat',
+                    onConfirm: () => _doAction(() => widget.provider
+                        .rebootContainer(widget.nodeName, vmid,
+                            isLxc: widget.isLxc)),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -469,8 +485,14 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
                   icon: Icons.stop_rounded,
                   label: 'Durdur',
                   color: colors.error,
-                  onTap: () => _doAction(() => widget.provider
-                      .stopContainer(widget.nodeName, vmid, isLxc: widget.isLxc)),
+                  onTap: () => _confirmPowerAction(
+                    colors,
+                    message: '${widget.item['name'] ?? ''} durdurulacak.',
+                    confirmLabel: 'Durdur',
+                    onConfirm: () => _doAction(() => widget.provider
+                        .stopContainer(widget.nodeName, vmid,
+                            isLxc: widget.isLxc)),
+                  ),
                 ),
               ),
             ])
@@ -481,9 +503,14 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
                   icon: Icons.play_arrow_rounded,
                   label: 'Başlat',
                   color: colors.success,
-                  onTap: () => _doAction(() => widget.provider.startContainer(
-                      widget.nodeName, vmid,
-                      isLxc: widget.isLxc)),
+                  onTap: () => _confirmPowerAction(
+                    colors,
+                    message: '${widget.item['name'] ?? ''} başlatılacak.',
+                    confirmLabel: 'Başlat',
+                    onConfirm: () => _doAction(() => widget.provider
+                        .startContainer(widget.nodeName, vmid,
+                            isLxc: widget.isLxc)),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),

@@ -91,7 +91,13 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     }
 
     if (user == null) {
-      if (mounted) setState(() => _stage = 'landing');
+      final prefs = await SharedPreferences.getInstance();
+      final isGuest = prefs.getBool('guest_mode') ?? false;
+      if (!isGuest) {
+        if (mounted) setState(() => _stage = 'landing');
+        return;
+      }
+      await _continueWithoutLogin(alreadyGuest: true);
       return;
     }
 
@@ -216,7 +222,14 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _continueWithoutLogin() async {
+  Future<void> _continueWithoutLogin({bool alreadyGuest = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!alreadyGuest) {
+      await prefs.setBool('guest_mode', true);
+    }
+    _lockEnabled = prefs.getBool('lock_enabled') ?? false;
+    _lockType = prefs.getString('lock_type') ?? 'none';
+
     if (!mounted) return;
     setState(() => _stage = 'welcome');
 
@@ -224,7 +237,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
       await _initProviders();
     }
     if (!mounted) return;
-    await _goHomeOrPermission();
+    await _proceedToLock();
   }
 
   void _goHome() {

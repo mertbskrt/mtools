@@ -34,6 +34,7 @@ enum NotificationTrigger {
   // durumunu kapsar. UPS'teki upsUnreachable deseniyle aynı: hem kayıp hem
   // geri gelme bildirimi AYNI tek trigger/toggle üzerinden yönetilir.
   connectivityLost,
+  networkChanged,
 }
 
 class NotificationRule {
@@ -298,6 +299,17 @@ class NotificationRule {
           description:
               'Telefonunuzun internet bağlantısı kesildiğinde/geri geldiğinde bildir',
           icon: Icons.wifi_off_rounded,
+          category: 'Bağlantı',
+        ),
+        NotificationRule(
+          trigger: NotificationTrigger.networkChanged,
+          enabled: true,
+          threshold: 0,
+          cooldownMinutes: 5,
+          label: 'Ağ Bağlantısı Değişti',
+          description:
+              'İç ağdaki bir sunucuya (Proxmox/UPS), interneti olduğunuz halde iç ağdan çıktığınız için ulaşılamadığında — genel "ulaşılamıyor" bildirimi yerine bunu gönderir',
+          icon: Icons.wifi_tethering_error_rounded,
           category: 'Bağlantı',
         ),
       ];

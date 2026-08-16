@@ -7,6 +7,8 @@ import '../../core/utils/app_transitions.dart';
 import '../../core/utils/connection_target.dart';
 import '../../core/widgets/connection_issue_view.dart';
 import '../../core/widgets/operation_overlay.dart';
+import '../../core/widgets/confirm_dialog.dart';
+import '../../core/services/quick_auth_gate.dart';
 import '../proxmox/proxmox_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../dashboard/proxmox_connection_screen.dart';
@@ -759,7 +761,28 @@ class _ContainerRow extends StatelessWidget {
     return h > 0 ? '${h}s ${m}dk' : '${m}dk';
   }
 
-  void _showActions(BuildContext context, AppThemeData colors,
+  Future<void> _runGatedPowerAction(BuildContext context, String message,
+      String confirmLabel, Future<void> Function() action) async {
+    final gated =
+        await QuickAuthGate.isScopeGated(scopeKey: 'lock_scope_power_ops');
+    if (!gated) {
+      action();
+      return;
+    }
+    if (!context.mounted) return;
+    final ok = await showAppConfirmDialog(
+      context: context,
+      title: 'Emin misiniz?',
+      message: message,
+      confirmLabel: confirmLabel,
+      isDestructive: false,
+      requireAuth: true,
+      authReason: 'İşlemi onaylamak için doğrulayın',
+    );
+    if (ok) action();
+  }
+
+  void _showActions(BuildContext context, AppThemeData colors, String name,
       String nodeName, int vmid, bool isRunning) {
     appShowModalBottomSheet(
       context: context,
@@ -788,7 +811,12 @@ class _ContainerRow extends StatelessWidget {
                     style: TextStyle(color: colors.textPrimary)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  provider.rebootContainer(nodeName, vmid, isLxc: isLxc);
+                  _runGatedPowerAction(
+                      context,
+                      '$name yeniden başlatılacak.',
+                      'Yeniden Başlat',
+                      () => provider.rebootContainer(nodeName, vmid,
+                          isLxc: isLxc));
                 },
               ),
               ListTile(
@@ -796,7 +824,12 @@ class _ContainerRow extends StatelessWidget {
                 title: Text('Durdur', style: TextStyle(color: colors.textPrimary)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  provider.stopContainer(nodeName, vmid, isLxc: isLxc);
+                  _runGatedPowerAction(
+                      context,
+                      '$name durdurulacak.',
+                      'Durdur',
+                      () => provider.stopContainer(nodeName, vmid,
+                          isLxc: isLxc));
                 },
               ),
             ] else
@@ -805,7 +838,12 @@ class _ContainerRow extends StatelessWidget {
                 title: Text('Başlat', style: TextStyle(color: colors.textPrimary)),
                 onTap: () {
                   Navigator.pop(ctx);
-                  provider.startContainer(nodeName, vmid, isLxc: isLxc);
+                  _runGatedPowerAction(
+                      context,
+                      '$name başlatılacak.',
+                      'Başlat',
+                      () => provider.startContainer(nodeName, vmid,
+                          isLxc: isLxc));
                 },
               ),
             const SizedBox(height: 8),
@@ -841,7 +879,8 @@ class _ContainerRow extends StatelessWidget {
           ),
         ),
       ),
-      onLongPress: () => _showActions(context, colors, nodeName, vmid, isRunning),
+      onLongPress: () =>
+          _showActions(context, colors, name, nodeName, vmid, isRunning),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(

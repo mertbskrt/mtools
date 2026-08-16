@@ -12,6 +12,7 @@ import '../../core/services/cloud_sync_service.dart';
 import '../../core/services/widget_service.dart';
 import '../../core/services/node_sensor_service.dart';
 import '../../core/utils/credential_sync.dart';
+import '../../core/utils/deliberate_off_store.dart';
 
 /// Bu turda erişilemeyen, kayıtlı bir Proxmox sunucusu — ister daha önce en
 /// az bir node'u bilinsin ister ilk bağlantısından beri hiç başarılı olmasın.
@@ -66,6 +67,15 @@ class ProxmoxProvider extends ChangeNotifier {
   Timer? _retryTimer;
   bool isOffline = false;
   String? retryStatus;
+
+  DateTime? lastSuccessAt;
+
+  Map<String, DeliberateOffEntry> _deliberateOffNodes = {};
+  Map<String, DeliberateOffEntry> _deliberateOffContainers = {};
+
+  bool isDeliberateOff(String node) =>
+      isDeliberateOffActive(_deliberateOffNodes[node]);
+  DateTime? deliberateOffAt(String node) => _deliberateOffNodes[node]?.at;
 
   // ── "Yanlış ağdasın" ayrımı için son başarısız host ────────────────────────
   // Bağlantı hatasının internet'in yokluğundan mı yoksa hedef adresin türünden
@@ -172,6 +182,8 @@ class ProxmoxProvider extends ChangeNotifier {
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
+    _deliberateOffNodes = decodeDeliberateOffMap(prefs.getString('deliberate_off_nodes'));
+    _deliberateOffContainers = decodeDeliberateOffMap(prefs.getString('deliberate_off_containers'));
     _services.clear();
     _nodeServiceMap.clear();
     credentialMissingServers = [];
@@ -338,6 +350,7 @@ class ProxmoxProvider extends ChangeNotifier {
   }
 
   void _onRefreshSuccess() {
+    lastSuccessAt = DateTime.now();
     if (isOffline) {
       isOffline = false;
       _retryCount = 0;
@@ -345,6 +358,62 @@ class ProxmoxProvider extends ChangeNotifier {
       retryStatus = null;
       lastFailedHost = null;
     }
+  }
+
+  Future<void> _persistDeliberateOffMaps() async {
+    final prefs = await SharedPreferences.getInstance();
+    final nEncoded = encodeDeliberateOffMap(_deliberateOffNodes);
+    final cEncoded = encodeDeliberateOffMap(_deliberateOffContainers);
+    await prefs.setString('deliberate_off_nodes', nEncoded);
+    await prefs.setString('deliberate_off_containers', cEncoded);
+    await HomeWidget.saveWidgetData('bg_deliberate_off_nodes', nEncoded);
+    await HomeWidget.saveWidgetData('bg_deliberate_off_containers', cEncoded);
+  }
+
+  /// Node kapatma/yeniden başlatma komutu (kesin ya da muhtemel olarak)
+  /// teslim edildiğinde çağrılır. Shutdown durumunda, node üzerinde o an
+  /// çalışan tüm CT/VM'ler de işaretlenir — Proxmox'un pve-guests servisi
+  /// node kapanınca bunları kendi (MTools token'ı taşımayan) task'larıyla
+  /// ayrı ayrı durdurur; background_service.dart bu kaydı kullanarak o
+  /// kaskad bildirimlerini bastırır.
+  Future<void> _markDeliberateOff(String node, {required String action}) async {
+    _deliberateOffNodes[node] = DeliberateOffEntry(action, DateTime.now());
+    if (action == 'shutdown') {
+      for (final c in [...?nodeLXCs[node], ...?nodeVMs[node]]) {
+        if (c['status'] != 'running') continue;
+        final vmid = c['vmid'];
+        if (vmid == null) continue;
+        _deliberateOffContainers['$node::$vmid'] =
+            DeliberateOffEntry('shutdown', DateTime.now());
+      }
+    }
+    await _persistDeliberateOffMaps();
+  }
+
+  Future<void> _markContainerDeliberateOff(String node, int vmid) async {
+    _deliberateOffContainers['$node::$vmid'] =
+        DeliberateOffEntry('shutdown', DateTime.now());
+    await _persistDeliberateOffMaps();
+  }
+
+  /// Sadece bu turda TAZE olarak `online` raporlanan node'lar için bilinçli-
+  /// kapatma kaydı temizlenir. `nodes` listesindeki birleştirilmiş (bu turda
+  /// hata veren servisler için eski kaydı geri ekleyen, bkz. refresh())
+  /// veri kullanılmaz — aksi halde hâlâ gerçekten erişilemeyen bir node'un
+  /// kaydı yanlışlıkla temizlenip alarmlar kesinti ortasında susturulabilir.
+  Future<void> _clearDeliberateOffForOnlineNodes(
+      Map<String, String?> freshNodeStatus) async {
+    final online = freshNodeStatus.entries
+        .where((e) => e.value == 'online')
+        .map((e) => e.key)
+        .toSet();
+    final removed = online
+        .where((n) => _deliberateOffNodes.remove(n) != null)
+        .toSet();
+    if (removed.isEmpty) return;
+    _deliberateOffContainers
+        .removeWhere((k, _) => removed.any((n) => k.startsWith('$n::')));
+    await _persistDeliberateOffMaps();
   }
 
   Future<void> manualRefresh() async {
@@ -388,6 +457,7 @@ class ProxmoxProvider extends ChangeNotifier {
       final newNetstat = <String, List<dynamic>>{};
       final newDiskSmarts = <String, Map<String, dynamic>>{};
       final failedThisCycle = <ProxmoxService>{};
+      final freshNodeStatus = <String, String?>{};
 
       for (final service in _services) {
         List<dynamic> serviceNodes;
@@ -407,7 +477,9 @@ class ProxmoxProvider extends ChangeNotifier {
         newNodes.addAll(serviceNodes);
 
         for (final node in serviceNodes) {
-          _nodeServiceMap[node['node'] as String] = service;
+          final name = node['node'] as String;
+          _nodeServiceMap[name] = service;
+          freshNodeStatus[name] = node['status'] as String?;
         }
 
         // Node'lar birbirinden bağımsız olduğu için paralel sorgulanır.
@@ -508,6 +580,15 @@ class ProxmoxProvider extends ChangeNotifier {
       unreachableServers = failedThisCycle
           .map((s) => UnreachableProxmoxServer(name: s.name, host: s.rawHost))
           .toList();
+
+      await _clearDeliberateOffForOnlineNodes(freshNodeStatus);
+      // Kendi kendini onaran yazma — bkz. _cachedServersRaw yorumundaki not.
+      if (_deliberateOffNodes.isNotEmpty || _deliberateOffContainers.isNotEmpty) {
+        HomeWidget.saveWidgetData(
+            'bg_deliberate_off_nodes', encodeDeliberateOffMap(_deliberateOffNodes));
+        HomeWidget.saveWidgetData('bg_deliberate_off_containers',
+            encodeDeliberateOffMap(_deliberateOffContainers));
+      }
 
       if (_nodeOrder.isNotEmpty) {
         newNodes.sort((a, b) {
@@ -866,6 +947,7 @@ class ProxmoxProvider extends ChangeNotifier {
     );
     try {
       await _serviceFor(node).stopVM(node, vmid, isLxc: isLxc);
+      await _markContainerDeliberateOff(node, vmid);
       _setOperation(
         inProgress: true,
         message:
@@ -947,6 +1029,7 @@ class ProxmoxProvider extends ChangeNotifier {
     );
     try {
       await _serviceFor(node).rebootNode(node);
+      await _markDeliberateOff(node, action: 'reboot');
       _setOperation(
         inProgress: true,
         message: 'Tamamlandı!',
@@ -962,7 +1045,20 @@ class ProxmoxProvider extends ChangeNotifier {
         message: 'Node yeniden başlatma başarısız: $node',
         detail: e.toString(),
       );
-      await _setOperationFailed(e);
+      if (e is ProxmoxCommandUncertainException && e.likelyDelivered) {
+        await _markDeliberateOff(node, action: 'reboot');
+        _setOperation(
+          inProgress: true,
+          message: 'Komut Gönderildi',
+          subMessage:
+              '$node için yeniden başlatma komutu iletildi ama yanıt alınamadı — makine yeniden başlıyor olabilir.',
+          progress: 1.0,
+          success: true,
+        );
+        await Future.delayed(const Duration(milliseconds: 1800));
+      } else {
+        await _setOperationFailed(e);
+      }
     } finally {
       _setOperation(inProgress: false);
     }
@@ -977,6 +1073,7 @@ class ProxmoxProvider extends ChangeNotifier {
     );
     try {
       await _serviceFor(node).shutdownNode(node);
+      await _markDeliberateOff(node, action: 'shutdown');
       _setOperation(
         inProgress: true,
         message: 'Tamamlandı!',
@@ -992,7 +1089,23 @@ class ProxmoxProvider extends ChangeNotifier {
         message: 'Node kapatma başarısız: $node',
         detail: e.toString(),
       );
-      await _setOperationFailed(e);
+      if (e is ProxmoxCommandUncertainException && e.likelyDelivered) {
+        // Proxmox'un shutdown API'si fire-and-forget'tir — komut muhtemelen
+        // ulaştı, yanıt geri dönerken bağlantı koptu. "Başarısız" değil,
+        // nötr bir "gönderildi ama teyit edilemedi" mesajı gösterilir.
+        await _markDeliberateOff(node, action: 'shutdown');
+        _setOperation(
+          inProgress: true,
+          message: 'Komut Gönderildi',
+          subMessage:
+              '$node için kapatma komutu iletildi ama yanıt alınamadı — makine kapanıyor olabilir. Birkaç dakika sonra durumu kontrol edin.',
+          progress: 1.0,
+          success: true,
+        );
+        await Future.delayed(const Duration(milliseconds: 1800));
+      } else {
+        await _setOperationFailed(e);
+      }
     } finally {
       _setOperation(inProgress: false);
     }

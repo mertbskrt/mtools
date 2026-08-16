@@ -2,6 +2,78 @@
 
 All notable changes to MTools are documented in this file.
 
+## [3.3.0] — 2026-08-16
+
+### New: App Lock
+
+- Added an optional PIN/biometric lock that can guard sensitive areas
+  of the app individually — the Security settings screen, power
+  operations (start/stop/reboot/delete on nodes, containers, and VMs),
+  and the Terminal tab each have their own on/off toggle, so you can
+  lock only what matters to you. When a locked power operation is
+  triggered, you now get a clear confirmation dialog first, with
+  authentication required when that scope is locked.
+- Redesigned the PIN entry screen with a circular keypad and an
+  explicit confirm button, replacing the old auto-submit-on-length
+  behavior.
+- "Continue without login" (guest mode) is now remembered across app
+  restarts — previously you were sent back to the login screen every
+  time you reopened the app, even if you'd already chosen to skip
+  sign-in.
+
+### New: smarter handling of power outages and shutdowns
+
+- Shutting down or restarting a node no longer shows a false "failed"
+  error when the command likely reached the server but the response
+  was lost (common during a real power event) — you now get a neutral
+  "command sent, but no confirmation received" message instead.
+- The app now remembers when you deliberately shut down or restarted a
+  node. While it's off, you won't get a barrage of "server
+  unreachable" and container-stopped notifications — and when every
+  configured server is down at once, every tab shows one shared,
+  calm "systems are off, wake them remotely or power them on
+  physically" screen instead of each tab separately complaining about
+  a lost connection.
+- If a node goes offline and comes back later, container/VM
+  start-stop notifications from during the outage no longer arrive as
+  a large, delayed batch — you just get the existing "server back
+  online" notification.
+- Fixed the Proxmox "Sistem" tab showing "no server connected yet /
+  add a server" when a server was actually configured but only
+  temporarily unreachable — that screen is now reserved for when
+  nothing is configured at all.
+
+### New: Wake-on-LAN relay overhaul
+
+- Any SSH server saved in the Terminal tab can now be used as a WOL
+  relay, not just Proxmox nodes.
+- Fixed UDP magic packets never actually being attempted on Android/
+  iOS due to an overly strict platform check.
+- Relay selection no longer guesses which SSH server to use by
+  fuzzy-matching names — it now requires an exact match, so a magic
+  packet can no longer be sent from the wrong machine.
+
+### Design: home-screen widgets
+
+- Redesigned the Proxmox ("System") and UPS home-screen widgets for
+  better use of space, and to show input/output voltage on the UPS
+  widget.
+
+### Fixed
+
+- Terminal: fixed a connection leak where an SSH session could be left
+  open in the background, unregistered and unclosed, if you navigated
+  away while it was still connecting.
+- Terminal: fixed reused sessions (leave via back, come back to the
+  same server) not reflecting a server-side disconnect until you left
+  and reopened the screen again.
+- Terminal: clearer error messages, fixed text selection being
+  invisible while highlighting, and a session now stays alive in the
+  background when you press back (only the explicit "Close" button
+  ends it).
+- UPS: removed a stray loading spinner for a server that isn't
+  connected.
+
 ## [3.2.2] — 2026-08-14
 
 ### Fixed

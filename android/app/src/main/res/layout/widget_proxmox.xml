@@ -91,8 +91,8 @@
 
                 <ImageView
                     android:id="@+id/node_dot_1"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:src="@drawable/ic_server_unit" />
 
                 <TextView
@@ -100,23 +100,25 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
                     android:text="—"
                     android:textColor="@color/widget_text_primary"
                     android:textSize="12sp"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
-
-                <TextView
-                    android:id="@+id/node_stats_1"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textColor="@color/widget_text_secondary"
-                    android:textSize="11sp"
+                    android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/node_stats_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/node_bar_1"
@@ -150,8 +152,8 @@
 
                 <ImageView
                     android:id="@+id/node_dot_2"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:src="@drawable/ic_server_unit" />
 
                 <TextView
@@ -159,23 +161,25 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
                     android:text="—"
                     android:textColor="@color/widget_text_primary"
                     android:textSize="12sp"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
-
-                <TextView
-                    android:id="@+id/node_stats_2"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textColor="@color/widget_text_secondary"
-                    android:textSize="11sp"
+                    android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/node_stats_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/node_bar_2"
@@ -209,8 +213,8 @@
 
                 <ImageView
                     android:id="@+id/node_dot_3"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:src="@drawable/ic_server_unit" />
 
                 <TextView
@@ -218,23 +222,25 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
                     android:text="—"
                     android:textColor="@color/widget_text_primary"
                     android:textSize="12sp"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
-
-                <TextView
-                    android:id="@+id/node_stats_3"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textColor="@color/widget_text_secondary"
-                    android:textSize="11sp"
+                    android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/node_stats_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/node_bar_3"
@@ -268,8 +274,8 @@
 
                 <ImageView
                     android:id="@+id/node_dot_4"
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
                     android:src="@drawable/ic_server_unit" />
 
                 <TextView
@@ -277,23 +283,25 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
                     android:text="—"
                     android:textColor="@color/widget_text_primary"
                     android:textSize="12sp"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
-
-                <TextView
-                    android:id="@+id/node_stats_4"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textColor="@color/widget_text_secondary"
-                    android:textSize="11sp"
+                    android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/node_stats_4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text=""
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/node_bar_4"

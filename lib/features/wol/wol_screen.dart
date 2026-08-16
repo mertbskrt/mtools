@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../core/utils/app_transitions.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +13,7 @@ import 'package:dartssh2/dartssh2.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/cloud_sync_service.dart';
 import '../../core/services/widget_service.dart';
+import '../../core/utils/credential_sync.dart';
 import '../proxmox/proxmox_provider.dart';
 
 // ─────────────────────────────────────────────
@@ -116,9 +118,38 @@ class _WolScreenState extends State<WolScreen> {
     await WidgetService.updateWol(_targets.map((t) => t.toJson()).toList());
   }
 
-  void _showAddDialog({WolTarget? target, int? index}) {
+  Future<List<String>> _loadTerminalServerNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cloudRaw = await CloudSyncService().getSetting('ssh_servers');
+    final localRaw = prefs.getString('ssh_servers');
+    if (cloudRaw == null && localRaw == null) return [];
+    final cloudList = cloudRaw == null
+        ? <Map<String, dynamic>>[]
+        : (jsonDecode(cloudRaw) as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+    final localList = localRaw == null
+        ? <Map<String, dynamic>>[]
+        : (jsonDecode(localRaw) as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+    final merged = mergeCloudStructureWithLocalCredentials(
+      cloudList: cloudList,
+      localList: localList,
+      credentialFields: ['password'],
+    );
+    return merged
+        .where((m) => (m['needsCredentials'] as bool? ?? false) == false)
+        .map((m) => m['name'] as String? ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> _showAddDialog({WolTarget? target, int? index}) async {
     final provider = context.read<ProxmoxProvider>();
     final nodes = provider.nodes.map((n) => n['node'] as String).toList();
+    final terminalServers = await _loadTerminalServerNames();
+    if (!mounted) return;
 
     appShowModalBottomSheet(
       context: context,
@@ -127,6 +158,7 @@ class _WolScreenState extends State<WolScreen> {
       builder: (ctx) => _WolTargetSheet(
         existing: target,
         nodes: nodes,
+        terminalServers: terminalServers,
         onSave: (t) async {
           setState(() {
             if (index != null) {
@@ -322,9 +354,9 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
   // ── Magic Packet gönderici (UDP) ──────────────────────────────────────────
 
   Future<void> _sendUdpMagicPacket(String mac, String broadcastIp) async {
-    if (!Platform.isLinux && !Platform.isWindows && !Platform.isMacOS) {
+    if (kIsWeb) {
       throw Exception(
-          'UDP bu platformda desteklenmiyor. SSH yöntemini kullanın.');
+          'UDP bu platformda (web) desteklenmiyor. SSH yöntemini kullanın.');
     }
 
     final cleanMac = mac.replaceAll(RegExp(r'[:\-]'), '');
@@ -374,13 +406,11 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
 
       Map<String, dynamic>? match;
       for (final s in servers) {
-        final name = (s['name'] as String? ?? '').toLowerCase();
-        if (name.contains(nodeName.toLowerCase()) || name.contains('proxmox')) {
+        if ((s['name'] as String? ?? '') == nodeName) {
           match = s;
           break;
         }
       }
-      match ??= servers.isNotEmpty ? servers.first : null;
 
       if (match != null) {
         nodeIp = match['host'] as String? ?? '';
@@ -392,7 +422,7 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
 
     if (nodeIp.isEmpty) {
       throw Exception(
-          'SSH sunucusu bulunamadı. Lütfen Terminal ekranından bir SSH sunucusu ekleyin.');
+          "'$nodeName' adlı SSH sunucusu bulunamadı. Cihazı düzenleyip relay'i tekrar seçin.");
     }
     if (sshPass.isEmpty) {
       throw Exception(
@@ -477,15 +507,9 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
       }
     }
 
-    if (!success && (method == 'ssh' || method == 'both')) {
-      final availableNodes =
-          provider.nodes.map((n) => n['node'] as String).toList();
-      String relayNode = widget.target.relayNode;
-      if (relayNode.isEmpty ||
-          (availableNodes.isNotEmpty && !availableNodes.contains(relayNode))) {
-        relayNode = availableNodes.isNotEmpty ? availableNodes.first : '';
-      }
+    final relayNode = widget.target.relayNode;
 
+    if (!success && (method == 'ssh' || method == 'both')) {
       if (relayNode.isNotEmpty) {
         try {
           await _sendViaSsh(relayNode, widget.target.mac);
@@ -495,20 +519,14 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
           errors.add('SSH: ${e.toString().split('\n').first}');
         }
       } else {
-        errors.add('SSH: Kullanılabilir relay node bulunamadı');
+        errors.add('SSH: Relay sunucu seçilmemiş — cihazı düzenleyin');
       }
     }
 
     if (!success && (method == 'ssh' || method == 'both')) {
       final availableNodes =
           provider.nodes.map((n) => n['node'] as String).toList();
-      String relayNode = widget.target.relayNode;
-      if (relayNode.isEmpty ||
-          (availableNodes.isNotEmpty && !availableNodes.contains(relayNode))) {
-        relayNode = availableNodes.isNotEmpty ? availableNodes.first : '';
-      }
-
-      if (relayNode.isNotEmpty) {
+      if (availableNodes.contains(relayNode)) {
         try {
           await provider.sendWakeOnLan(relayNode, widget.target.mac);
           success = true;
@@ -794,11 +812,13 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
 class _WolTargetSheet extends StatefulWidget {
   final WolTarget? existing;
   final List<String> nodes;
+  final List<String> terminalServers;
   final Function(WolTarget) onSave;
 
   const _WolTargetSheet({
     this.existing,
     required this.nodes,
+    this.terminalServers = const [],
     required this.onSave,
   });
 
@@ -825,11 +845,11 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
     _descCtrl = TextEditingController(text: e?.description ?? '');
     _method = e?.method ?? 'both';
 
-    if (e?.relayNode.isNotEmpty == true &&
-        widget.nodes.contains(e!.relayNode)) {
+    final allRelays = [...widget.nodes, ...widget.terminalServers];
+    if (e?.relayNode.isNotEmpty == true && allRelays.contains(e!.relayNode)) {
       _selectedNode = e.relayNode;
-    } else if (widget.nodes.isNotEmpty) {
-      _selectedNode = widget.nodes.first;
+    } else if (allRelays.isNotEmpty) {
+      _selectedNode = allRelays.first;
     }
   }
 
@@ -865,7 +885,7 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
     }
     if ((_method == 'ssh' || _method == 'both') && _selectedNode == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('SSH yöntemi için bir relay node seçin'),
+          content: const Text('SSH yöntemi için bir relay sunucu seçin'),
           backgroundColor: colors.error));
       return;
     }
@@ -961,67 +981,31 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
                   color: colors.warning,
                   icon: Icons.warning_amber_outlined,
                   text:
-                      'UDP yöntemi yalnızca aynı ağdayken çalışır ve mobil platformlarda desteklenmez.\nDış ağdan erişim için SSH yöntemini kullanın.'),
+                      'UDP yöntemi yalnızca aynı ağdayken (cihaz ile hedef aynı yerel ağda) çalışır.\nDış ağdan erişim için SSH yöntemini kullanın.'),
             ],
             if (_method == 'ssh' || _method == 'both') ...[
-              Text('Relay Node (SSH)',
+              Text('Relay Sunucu (SSH)',
                   style: TextStyle(color: colors.textSecondary, fontSize: 13)),
               const SizedBox(height: 8),
-              if (widget.nodes.isEmpty)
+              if (widget.nodes.isEmpty && widget.terminalServers.isEmpty)
                 _infoBox(context,
                     color: colors.error,
                     icon: Icons.warning_outlined,
                     text:
-                        'Proxmox bağlantısı bulunamadı. Lütfen önce Proxmox\'a bağlanın.')
-              else
-                ...widget.nodes.map((node) {
-                  final selected = _selectedNode == node;
-                  return GestureDetector(
-                    key: ValueKey(node),
-                    onTap: () => setState(() => _selectedNode = node),
-                    child: AnimatedContainer(
-                      duration: AppMotion.fast,
-                      curve: AppMotion.curve,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? colors.primary.withValues(alpha: 0.12)
-                            : colors.surface2,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(
-                          color: selected
-                              ? colors.primary.withValues(alpha: 0.4)
-                              : colors.hairline,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            selected
-                                ? Icons.radio_button_checked
-                                : Icons.radio_button_unchecked,
-                            color: selected ? colors.primary : colors.textMuted,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Icon(Icons.dns_outlined,
-                              color: colors.textMuted, size: 16),
-                          const SizedBox(width: 8),
-                          Text(node,
-                              style: TextStyle(
-                                  color: selected
-                                      ? colors.textPrimary
-                                      : colors.textSecondary,
-                                  fontWeight: selected
-                                      ? FontWeight.w600
-                                      : FontWeight.normal)),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
+                        'Ne Proxmox sunucusu ne de Terminal SSH sunucusu bulundu. Lütfen önce birini ekleyin.')
+              else ...[
+                if (widget.nodes.isNotEmpty) ...[
+                  _relaySectionLabel(context, 'Proxmox Node\'ları'),
+                  ...widget.nodes.map((node) => _relayOption(context, node,
+                      icon: Icons.dns_outlined)),
+                ],
+                if (widget.terminalServers.isNotEmpty) ...[
+                  _relaySectionLabel(context, 'Terminal SSH Sunucuları'),
+                  ...widget.terminalServers.map((name) => _relayOption(
+                      context, name,
+                      icon: Icons.terminal)),
+                ],
+              ],
               const SizedBox(height: 4),
             ],
             _buildField(context,
@@ -1047,6 +1031,65 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
                         fontSize: 15)),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _relaySectionLabel(BuildContext context, String text) {
+    final colors = context.appColors;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 6),
+      child: Text(text,
+          style: TextStyle(
+              color: colors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _relayOption(BuildContext context, String name,
+      {required IconData icon}) {
+    final colors = context.appColors;
+    final selected = _selectedNode == name;
+    return GestureDetector(
+      key: ValueKey(name),
+      onTap: () => setState(() => _selectedNode = name),
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        curve: AppMotion.curve,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? colors.primary.withValues(alpha: 0.12)
+              : colors.surface2,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+            color: selected
+                ? colors.primary.withValues(alpha: 0.4)
+                : colors.hairline,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: selected ? colors.primary : colors.textMuted,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Icon(icon, color: colors.textMuted, size: 16),
+            const SizedBox(width: 8),
+            Text(name,
+                style: TextStyle(
+                    color:
+                        selected ? colors.textPrimary : colors.textSecondary,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.normal)),
           ],
         ),
       ),
@@ -1196,12 +1239,11 @@ class _HowItWorksCard extends StatelessWidget {
           const SizedBox(height: 12),
           const _WorkStep(
               icon: Icons.wifi_tethering,
-              text:
-                  'UDP: Aynı ağdayken direkt magic packet gönderir (masaüstü)'),
+              text: 'UDP: Aynı ağdayken direkt magic packet gönderir'),
           const _WorkStep(
               icon: Icons.terminal,
               text:
-                  'SSH: Proxmox node üzerinden etherwake çalıştırır (her platform)'),
+                  'SSH: Proxmox node veya Terminal SSH sunucusu üzerinden etherwake çalıştırır (her platform)'),
           const _WorkStep(
               icon: Icons.repeat,
               text:
