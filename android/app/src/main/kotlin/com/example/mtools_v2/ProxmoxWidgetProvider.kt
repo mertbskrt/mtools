@@ -107,7 +107,14 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
             val perRowMedium = (height - 50) / rowCount
 
             val detailed = width >= 200 && perRowLarge >= 80
-            val compact = width < 130 || (!detailed && perRowMedium < 55)
+            // Eskiden satır sayısı arttıkça (ör. sabit boyutlu bir widget'a
+            // 3. makine eklendiğinde) tek bir eşik aşılınca TÜM widget aniden
+            // isimlerin tamamen kaybolduğu "3/3 çevrimiçi" özetine düşüyordu.
+            // Artık önce satırların kendi içindeki ikincil öğeler (ilerleme
+            // çubuğu, iç boşluk — bkz. buildViews) küçülüyor; tek-özet moduna
+            // düşmek gerçekten hiçbir satırın okunur şekilde sığmayacağı
+            // aşırı durumlar için ayrılıyor.
+            val compact = width < 130 || (!detailed && perRowMedium < 22)
             val richStats = !compact && !detailed && perRowMedium >= 45
             val layoutId = when {
                 detailed -> R.layout.widget_proxmox_large
@@ -117,6 +124,7 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
             val views = buildViews(
                 context, layoutId, raw, selectionRaw,
                 detailed = detailed, compactSummary = compact, richStats = richStats,
+                perRowHeight = perRowMedium,
             )
             try {
                 val updatedAt = prefs.getLong("proxmox_updated_at", 0L)
@@ -134,6 +142,9 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
             appWidgetManager.updateAppWidget(widgetId, views)
         }
 
+        private fun dp(context: Context, value: Int): Int =
+            (value * context.resources.displayMetrics.density).toInt()
+
         private fun buildViews(
             context: Context,
             layoutId: Int,
@@ -142,6 +153,7 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
             detailed: Boolean,
             compactSummary: Boolean,
             richStats: Boolean = false,
+            perRowHeight: Int = Int.MAX_VALUE,
         ): RemoteViews {
             val views = RemoteViews(context.packageName, layoutId)
 
@@ -267,6 +279,19 @@ class ProxmoxWidgetProvider : HomeWidgetProvider() {
                     views.setProgressBar(BAR_IDS[i], 100, if (online && !deviceOffline) cpu.coerceIn(0, 100) else 0, false)
                     if (detailed) {
                         views.setTextViewText(UPTIME_IDS[i], if (online) WidgetFormat.uptime(uptime) else "")
+                    }
+                    // Orta layout'ta (widget_proxmox.xml) satır sayısı arttıkça
+                    // her satırın kendi payına düşen yükseklik daralır — sabit
+                    // eşiğe göre TÜM widget'ı tek-özet moduna düşürmek yerine,
+                    // önce ikincil öğeler (ilerleme çubuğu, iç boşluk) küçültülüp
+                    // isimler mümkün olduğunca uzun süre görünür tutuluyor.
+                    if (!detailed && !compactSummary) {
+                        if (perRowHeight < 50) {
+                            views.setViewVisibility(BAR_IDS[i], View.GONE)
+                        }
+                        if (perRowHeight < 40) {
+                            views.setViewPadding(ROW_IDS[i], dp(context, 4), dp(context, 4), dp(context, 4), dp(context, 4))
+                        }
                     }
                 } catch (_: Exception) {
                 }
