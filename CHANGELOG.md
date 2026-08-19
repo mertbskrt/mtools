@@ -2,6 +2,43 @@
 
 All notable changes to MTools are documented in this file.
 
+## [3.3.1] — 2026-08-17
+
+### Fixed
+
+- Fixed the Wake-on-LAN home-screen widget falsely showing "Sent ✓" for
+  devices configured to wake over SSH — it was attempting a local UDP
+  broadcast that could never reach them and reporting success anyway.
+  Those devices now open the app instead, where the real SSH relay can
+  run.
+- Fixed the Proxmox ("System") home-screen widget losing every machine
+  name and collapsing to a bare "3/3 online" count once too many
+  machines were configured for the widget's size — row detail now
+  shrinks gradually (progress bar, then padding) so names stay visible
+  much longer, with the bare summary reserved for genuinely tiny
+  widgets.
+- Fixed the "what's new" text in the update dialog and update screen
+  showing raw markdown symbols instead of properly formatted headings
+  and bullets.
+- Added a manual refresh button to the release history screen, and
+  fixed it being stuck showing outdated release notes for up to an
+  hour with no way to force a refresh.
+- Fixed a rare race in the background connectivity check where two
+  overlapping checks could duplicate a notification or drop a counter
+  update.
+
+### Consistency: "server unreachable while you're online" screens
+
+- Unified the wording and layout used across Proxmox, AdGuard, UPS,
+  and Terminal when a specific server can't be reached but your phone
+  has internet — previously each screen had its own hand-written text
+  and one of three different layouts. "Your phone has no internet at
+  all" is now its own consistent message everywhere too, with a calmer
+  tone than a real server problem.
+- Terminal's "connection failed" notification can now be turned on or
+  off from Settings like every other notification — previously it was
+  always on and outside the notification system entirely.
+
 ## [3.3.0] — 2026-08-16
 
 ### New: App Lock

@@ -508,27 +508,22 @@ class _AboutScreenState extends State<AboutScreen> {
   ];
 
   static const _releaseNotes = [
-    'Uygulama Kilidi eklendi — Güvenlik ayarları, güç işlemleri '
-        '(başlat/durdur/yeniden başlat/sil) ve Terminal sekmesi ayrı '
-        'ayrı PIN/biyometrik kilitle korunabiliyor.',
-    'Kayıtsız devam ettiğinizde artık bu tercih hatırlanıyor — '
-        'önceden uygulama her açılışta giriş ekranına dönüyordu.',
-    'Elektrik kesintisi sonrası: node kapatma/yeniden başlatma komutu '
-        'yanıtı kaybolduğunda artık yanlışlıkla "başarısız" göstermiyor; '
-        'bilinçli kapatılan makineler için gereksiz "erişilemiyor" '
-        'bildirimleri ve toplu/gecikmeli konteyner bildirimleri artık '
-        'gönderilmiyor; tüm sunuculara aynı anda ulaşılamadığında tüm '
-        'sekmelerde ortak, sakin bir durum ekranı gösteriliyor.',
-    'Wake-on-LAN: artık Terminal\'e kayıtlı her SSH sunucusu relay '
-        'olarak kullanılabiliyor; UDP paketlerinin mobil cihazlarda hiç '
-        'denenmemesi ve relay\'in yanlış sunucuya bağlanması sorunları '
-        'giderildi.',
-    'Sistem ve UPS ana ekran widget\'ları yeniden tasarlandı, UPS '
-        'widget\'ında artık giriş/çıkış voltajı da gösteriliyor.',
-    'Terminal: arka planda sızan SSH bağlantıları ve yeniden kullanılan '
-        'oturumlarda bağlantı kopması bildirimlerinin gecikmesi '
-        'giderildi; hata mesajları netleştirildi, metin seçimi '
-        'görünürlüğü düzeltildi, geri tuşu artık bağlantıyı kapatmıyor.',
+    'Wake-on-LAN widget\'ında SSH yöntemli cihazlar için "Gönderildi ✓" '
+        'yalanı düzeltildi — bu cihazlar artık widget\'tan doğrudan '
+        'uygulamayı açıyor, ulaşılamayan yerel ağ paketi göndermiyor.',
+    'Sistem widget\'ı artık çok makine eklendiğinde tüm isimleri '
+        'kaybedip tek bir "3/3" özetine düşmüyor — satır detayı boyuta '
+        'göre kademeli olarak sadeleşiyor.',
+    'Güncelleme diyaloğu ve ekranındaki "yenilikler" metni artık '
+        'markdown işaretlerini olduğu gibi göstermek yerine düzgün '
+        'başlık/madde biçiminde görünüyor; sürüm geçmişi ekranına '
+        'manuel yenileme butonu eklendi.',
+    'Proxmox/AdGuard/UPS/Terminal\'de "sunucuya internet varken '
+        'ulaşılamıyor" ekranları tek, tutarlı bir metne ve görünüme '
+        'kavuştu; Terminal\'in bağlantı hatası bildirimi artık '
+        'Ayarlar\'dan açılıp kapatılabiliyor.',
+    'Arka plan bağlantı kontrolünde nadir bir bildirim çakışması '
+        'düzeltildi.',
   ];
 }
 
