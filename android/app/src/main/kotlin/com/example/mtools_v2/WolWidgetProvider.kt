@@ -173,6 +173,7 @@ class WolWidgetProvider : HomeWidgetProvider() {
                 val device = devices.getJSONObject(i)
                 val name = device.optString("name", "-")
                 val mac = device.optString("mac", "")
+                val method = device.optString("method", "both")
                 val description = device.optString("description", "")
 
                 try {
@@ -207,6 +208,14 @@ class WolWidgetProvider : HomeWidgetProvider() {
                             views.setOnClickPendingIntent(
                                 BUTTON_IDS[i],
                                 WolWidgetActionReceiver.wakePendingIntent(context, widgetId, i, mac),
+                            )
+                        }
+                        method == "ssh" -> {
+                            views.setTextViewText(BUTTON_IDS[i], "Uygulamada Aç")
+                            views.setInt(BUTTON_IDS[i], "setBackgroundResource", R.drawable.widget_wol_button_bg)
+                            views.setOnClickPendingIntent(
+                                BUTTON_IDS[i],
+                                HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java),
                             )
                         }
                         else -> {

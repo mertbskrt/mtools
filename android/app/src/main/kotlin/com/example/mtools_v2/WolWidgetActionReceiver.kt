@@ -24,8 +24,11 @@ import java.net.InetAddress
 /// formatı sabit bir protokol (102 byte: 6×0xFF + MAC×16) olduğu için bu
 /// tekrarın gelecekte ayrışma riski düşük. SSH-relay yöntemi burada
 /// DESTEKLENMİYOR (dartssh2/ProxmoxProvider'a bağımlı, native tarafta yok)
-/// — 'ssh' yöntemli cihazlar için de widget yine de düz UDP magic packet
-/// dener (bkz. WolWidgetProvider — hiçbir satır "Uygulamada Aç"a düşmez).
+/// — 'ssh' yöntemli cihazlar için widget zaten "Uyandır" yerine
+/// "Uygulamada Aç" gösteriyor (bkz. WolWidgetProvider). Bu ayrım kritik:
+/// SSH yöntemi genelde kullanıcı UDP'nin hedefe ULAŞAMAYACAĞINI bildiği
+/// için (farklı alt ağ) seçilir — widget yine de düz UDP denerse paket
+/// hiçbir yere ulaşmadığı halde "Gönderildi ✓" yalanı söylenmiş olur.
 class WolWidgetActionReceiver : BroadcastReceiver() {
     companion object {
         private const val ACTION_WAKE_ONE = "com.example.mtools_v2.WOL_WAKE_ONE"
@@ -218,6 +221,7 @@ class WolWidgetActionReceiver : BroadcastReceiver() {
             val d = devices.getJSONObject(i)
             val name = d.optString("name", "")
             if (selected != null && !selected.contains(name)) continue
+            if (d.optString("method", "both") == "ssh") continue
             val mac = d.optString("mac", "")
             if (mac.isEmpty()) continue
             // WAKE_ONE'daki aynı asıl güvence — "Hepsini Uyandır"
