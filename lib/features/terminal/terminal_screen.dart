@@ -759,6 +759,15 @@ class _TerminalViewState extends State<_TerminalView> {
           body: '${widget.server.name} · $_errorTitle · ${hhmm(DateTime.now())}',
           cooldownKey: 'terminal_connect_failed_${widget.server.host}',
         );
+        // dispatchRuleNotification kendi başına SharedPreferences'a yazıyor
+        // (bkz. notification_dispatch.dart) — NotificationProvider'ın
+        // bellek-içi geçmişi bunu bilmez, tekrar yüklenmezse hem Bildirim
+        // Geçmişi ekranında görünmez hem de kullanıcı "Test bildirimi
+        // gönder"e basarsa provider'ın eski (bu yazımdan habersiz) listesi
+        // diskteki güncel veriyi ezer.
+        if (mounted) {
+          await context.read<NotificationProvider>().reloadHistory();
+        }
       }
     }
   }

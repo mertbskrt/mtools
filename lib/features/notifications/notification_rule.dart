@@ -194,7 +194,7 @@ class NotificationRule {
           trigger: NotificationTrigger.nodeOffline,
           enabled: true,
           threshold: 0,
-          cooldownMinutes: 0,
+          cooldownMinutes: 5,
           label: 'Makine Çevrimdışı',
           description: 'Bir makine çevrimdışı olduğunda bildir',
           icon: Icons.cloud_off,

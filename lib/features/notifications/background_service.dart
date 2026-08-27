@@ -424,7 +424,7 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
                 await notify(6, 'Sunucu Erişilemiyor',
                     '$nodeName · Son erişim: $lastSeen',
                     cooldownKey: 'node_offline_$nodeName',
-                    cooldownMinutes: 5);
+                    cooldownMinutes: rule.cooldownMinutes);
               }
             }
             await prefs.setString('node_online_state_$nodeName', 'offline');
@@ -472,7 +472,8 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
           if (rule != null && rule.enabled) {
             await notify(6, 'Sunucu Çevrimdışı',
                 '$nodeName · Erişilemiyor · $nowStr',
-                cooldownKey: 'node_offline_$nodeName');
+                cooldownKey: 'node_offline_$nodeName',
+                cooldownMinutes: rule.cooldownMinutes);
           }
         }
 
@@ -498,7 +499,8 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
             if (rule != null && rule.enabled) {
               await notify(9, 'Sunucu Tekrar Çevrimiçi',
                   '$nodeName · Erişilebilir · $nowStr',
-                  cooldownKey: 'node_online_$nodeName');
+                  cooldownKey: 'node_online_$nodeName',
+                  cooldownMinutes: rule.cooldownMinutes);
             }
           }
 
@@ -1060,7 +1062,9 @@ Future<void> _runCheck({required FlutterLocalNotificationsPlugin plugin}) async 
               lastStatus.isEmpty || lastStatus.toUpperCase().contains('OFF');
           if (isOffline && !wasOffline) {
             await notify(503, 'UPS Kapatıldı',
-                '$upsName · UPS kapalı raporlandı · ${hhmm(DateTime.now())}');
+                '$upsName · UPS kapalı raporlandı · ${hhmm(DateTime.now())}',
+                cooldownKey: 'ups_offline_$upsKey',
+                cooldownMinutes: offlineRule.cooldownMinutes);
           }
           await prefs.setString('ups_bg_offline_$upsKey', upsStatus);
         }
