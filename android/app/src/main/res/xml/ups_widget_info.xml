@@ -12,6 +12,7 @@
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
     android:initialLayout="@layout/widget_ups"
+    android:configure="com.example.mtools_v2.UpsWidgetConfigureActivity"
     android:description="@string/ups_widget_description"
     android:previewLayout="@layout/widget_ups_small"
     android:previewImage="@mipmap/ic_launcher" />

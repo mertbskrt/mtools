@@ -106,6 +106,18 @@
                 android:resource="@xml/ups_widget_info"/>
         </receiver>
 
+        <!-- Widget eklenirken/uzun basılıp "Yapılandır" denince açılan UPS
+             birim seçim ekranı — ups_widget_info.xml'deki android:configure
+             tarafından tetiklenir. -->
+        <activity
+            android:name=".UpsWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/WidgetConfigureTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".WolWidgetProvider"
             android:label="@string/wol_widget_label"

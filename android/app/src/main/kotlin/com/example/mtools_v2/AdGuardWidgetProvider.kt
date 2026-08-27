@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetPlugin
 import es.antonborri.home_widget.HomeWidgetProvider
@@ -53,10 +54,30 @@ class AdGuardWidgetProvider : HomeWidgetProvider() {
         val width = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 110)
         val height = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
 
-        val layoutId = when {
-            width >= 250 && height >= 250 -> R.layout.widget_adguard_xlarge
-            width >= 180 && height >= 180 -> R.layout.widget_adguard_large
-            width >= 140 && height >= 140 -> R.layout.widget_adguard
+        // Genişlik ve yükseklik bağımsız gate'lenir: içerik büyük ölçüde
+        // dikey bir yığın (istatistik satırları, en aktif istemciler kutusu
+        // xlarge'a SADECE dikey alan ekliyor, ekstra genişlik istemiyor) —
+        // eskiden ikisi birlikte (AND) aynı eşiği geçmek zorundaydı, bu da
+        // geniş-ama-kısa YA DA dar-ama-uzun bir yerleşimi gereksiz yere en
+        // düşük detay seviyesine düşürüyordu (ör. genişlik large için
+        // yeterliyken sadece xlarge'ın genişlik eşiğini geçemediği için
+        // fazladan yüksekliğe rağmen "en aktif istemciler" kutusu hiç
+        // gösterilmiyordu).
+        val heightTier = when {
+            height >= 250 -> 3
+            height >= 180 -> 2
+            height >= 140 -> 1
+            else -> 0
+        }
+        val widthCap = when {
+            width >= 180 -> 3
+            width >= 140 -> 1
+            else -> 0
+        }
+        val layoutId = when (minOf(heightTier, widthCap)) {
+            3 -> R.layout.widget_adguard_xlarge
+            2 -> R.layout.widget_adguard_large
+            1 -> R.layout.widget_adguard
             else -> R.layout.widget_adguard_small
         }
 
@@ -127,6 +148,12 @@ class AdGuardWidgetProvider : HomeWidgetProvider() {
                 if (isProtected) R.drawable.widget_dot_success else R.drawable.widget_dot_error,
             )
             trySetText(views, R.id.adguard_status_text, if (isProtected) "Korumalı" else "Korumasız")
+            trySetColor(
+                context,
+                views,
+                R.id.adguard_status_text,
+                if (isProtected) R.color.widget_success else R.color.widget_error,
+            )
             trySetText(views, R.id.adguard_total_value, WidgetFormat.compactCount(total))
             trySetText(views, R.id.adguard_blocked_value, "%$blockedPct")
             trySetText(views, R.id.adguard_clients_value, clients.toString())
@@ -169,6 +196,13 @@ class AdGuardWidgetProvider : HomeWidgetProvider() {
     private fun trySetProgress(views: RemoteViews, id: Int, value: Int) {
         try {
             views.setProgressBar(id, 100, value.coerceIn(0, 100), false)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun trySetColor(context: Context, views: RemoteViews, id: Int, colorRes: Int) {
+        try {
+            views.setTextColor(id, ContextCompat.getColor(context, colorRes))
         } catch (_: Exception) {
         }
     }

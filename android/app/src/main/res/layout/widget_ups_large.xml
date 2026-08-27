@@ -37,6 +37,15 @@
             android:text=""
             android:textColor="@color/widget_text_muted"
             android:textSize="10sp" />
+
+        <ImageView
+            android:id="@+id/ups_widget_settings"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_marginStart="4dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_widget_settings"
+            android:contentDescription="Widget ayarları" />
     </LinearLayout>
 
     <TextView
@@ -111,7 +120,9 @@
                 android:layout_marginTop="4dp"
                 android:text=""
                 android:textColor="@color/widget_text_secondary"
-                android:textSize="11sp" />
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/ups_bar_1"
@@ -179,7 +190,9 @@
                 android:layout_marginTop="4dp"
                 android:text=""
                 android:textColor="@color/widget_text_secondary"
-                android:textSize="11sp" />
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/ups_bar_2"
@@ -247,7 +260,9 @@
                 android:layout_marginTop="4dp"
                 android:text=""
                 android:textColor="@color/widget_text_secondary"
-                android:textSize="11sp" />
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/ups_bar_3"
@@ -314,7 +329,9 @@
                 android:layout_marginTop="4dp"
                 android:text=""
                 android:textColor="@color/widget_text_secondary"
-                android:textSize="11sp" />
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ProgressBar
                 android:id="@+id/ups_bar_4"
