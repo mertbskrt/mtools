@@ -845,13 +845,31 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
     _descCtrl = TextEditingController(text: e?.description ?? '');
     _method = e?.method ?? 'both';
 
-    final allRelays = [...widget.nodes, ...widget.terminalServers];
-    if (e?.relayNode.isNotEmpty == true && allRelays.contains(e!.relayNode)) {
-      _selectedNode = e.relayNode;
-    } else if (allRelays.isNotEmpty) {
-      _selectedNode = allRelays.first;
+    if (e?.relayNode.isNotEmpty == true) {
+      // Kaydı KORU — liste henüz yüklenmemiş, sunucu yeniden adlandırılmış/
+      // silinmiş ya da (senkronize kimlik bilgisi eksikliğinden) bu cihazda
+      // henüz seçilebilir olmasa bile burada sessizce BAŞKA bir sunucuya
+      // değiştirmiyoruz. Aksi halde kullanıcı sadece cihaz adını düzenleyip
+      // Kaydet'e bassa bile relay, farkında olmadan _allRelays.first'e
+      // değişmiş olurdu — build() bu durumu _staleRelay ile ayrıca
+      // kullanıcıya gösterip listede tekrar seçilebilir hale getiriyor.
+      _selectedNode = e!.relayNode;
+    } else if (_allRelays.isNotEmpty) {
+      _selectedNode = _allRelays.first;
     }
   }
+
+  List<String> get _allRelays => [...widget.nodes, ...widget.terminalServers];
+
+  /// Kayıtlı relay artık mevcut Proxmox node / Terminal SSH sunucu
+  /// listesinde yoksa (yeniden adlandırıldı/silindi/henüz yüklenmedi) bu,
+  /// o değeri taşır — build() bunu ayrı, uyarılı bir seçenek olarak
+  /// gösterir ki kullanıcı ya bilinçli olarak değiştirsin ya da olduğu
+  /// gibi korunsun.
+  String? get _staleRelay =>
+      _selectedNode != null && !_allRelays.contains(_selectedNode)
+          ? _selectedNode
+          : null;
 
   @override
   void dispose() {
@@ -987,12 +1005,16 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
               Text('Relay Sunucu (SSH)',
                   style: TextStyle(color: colors.textSecondary, fontSize: 13)),
               const SizedBox(height: 8),
+              if (_staleRelay != null) _staleRelayOption(context, _staleRelay!),
               if (widget.nodes.isEmpty && widget.terminalServers.isEmpty)
-                _infoBox(context,
-                    color: colors.error,
-                    icon: Icons.warning_outlined,
-                    text:
-                        'Ne Proxmox sunucusu ne de Terminal SSH sunucusu bulundu. Lütfen önce birini ekleyin.')
+                if (_staleRelay == null)
+                  _infoBox(context,
+                      color: colors.error,
+                      icon: Icons.warning_outlined,
+                      text:
+                          'Ne Proxmox sunucusu ne de Terminal SSH sunucusu bulundu. Lütfen önce birini ekleyin.')
+                else
+                  const SizedBox.shrink()
               else ...[
                 if (widget.nodes.isNotEmpty) ...[
                   _relaySectionLabel(context, 'Proxmox Node\'ları'),
@@ -1046,6 +1068,47 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
               color: colors.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w600)),
+    );
+  }
+
+  /// Şu an düzenlenen cihazın kayıtlı relay'i mevcut node/sunucu
+  /// listesinde bulunmuyor (yeniden adlandırıldı, silindi ya da bu
+  /// cihazda kimlik bilgisi henüz senkron değil). Kaydı sessizce
+  /// kaybetmemek için ayrı, uyarılı bir seçenek olarak gösteriyoruz —
+  /// kullanıcı dokunmazsa olduğu gibi korunur.
+  Widget _staleRelayOption(BuildContext context, String name) {
+    final colors = context.appColors;
+    return Container(
+      key: ValueKey('stale-$name'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.warning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: colors.warning.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.radio_button_checked, color: colors.warning, size: 18),
+          const SizedBox(width: 10),
+          Icon(Icons.warning_amber_rounded, color: colors.warning, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: TextStyle(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
+                Text('Kayıtlı ama şu an listede yok — dokunmazsanız korunur',
+                    style: TextStyle(color: colors.textMuted, fontSize: 10)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
