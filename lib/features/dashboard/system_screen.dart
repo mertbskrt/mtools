@@ -1186,63 +1186,76 @@ class _SummaryBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpace.md),
-          switch (style) {
-            'circular' => _SummaryCircularRow(
-                totalCT: totalCT,
-                runningCT: runningCT,
-                totalVM: totalVM,
-                runningVM: runningVM,
-                memPercent: memPercent,
-                memColor: memColor,
-                cpuPercent: cpuPercent,
-                cpuColor: cpuColor,
-                colors: colors,
+          AnimatedSize(
+            duration: AppMotion.base,
+            curve: AppMotion.curve,
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: AppMotion.base,
+              switchInCurve: AppMotion.curve,
+              switchOutCurve: AppMotion.curve,
+              child: KeyedSubtree(
+                key: ValueKey(style),
+                child: switch (style) {
+                  'circular' => _SummaryCircularRow(
+                      totalCT: totalCT,
+                      runningCT: runningCT,
+                      totalVM: totalVM,
+                      runningVM: runningVM,
+                      memPercent: memPercent,
+                      memColor: memColor,
+                      cpuPercent: cpuPercent,
+                      cpuColor: cpuColor,
+                      colors: colors,
+                    ),
+                  'cards' => _SummaryCardGrid(
+                      totalCT: totalCT,
+                      runningCT: runningCT,
+                      totalVM: totalVM,
+                      runningVM: runningVM,
+                      memPercent: memPercent,
+                      memColor: memColor,
+                      cpuPercent: cpuPercent,
+                      cpuColor: cpuColor,
+                      colors: colors,
+                    ),
+                  _ => Row(
+                      children: [
+                        Expanded(
+                            child: _StatColumn(
+                          label: 'Konteyner',
+                          value: '$runningCT/$totalCT',
+                          colors: colors,
+                        )),
+                        Container(width: 1, height: 32, color: colors.hairline),
+                        Expanded(
+                            child: _StatColumn(
+                          label: 'Sanal Makine',
+                          value: '$runningVM/$totalVM',
+                          colors: colors,
+                        )),
+                        Container(width: 1, height: 32, color: colors.hairline),
+                        Expanded(
+                            child: _StatColumn(
+                          label: 'Bellek',
+                          value: '%${memPercent.toStringAsFixed(0)}',
+                          colors: colors,
+                          valueColor: memColor,
+                        )),
+                        Container(width: 1, height: 32, color: colors.hairline),
+                        Expanded(
+                            child: _StatColumn(
+                          label: 'CPU',
+                          value: '%${cpuPercent.toStringAsFixed(0)}',
+                          colors: colors,
+                          valueColor: cpuColor,
+                        )),
+                      ],
+                    ),
+                },
               ),
-            'cards' => _SummaryCardGrid(
-                totalCT: totalCT,
-                runningCT: runningCT,
-                totalVM: totalVM,
-                runningVM: runningVM,
-                memPercent: memPercent,
-                memColor: memColor,
-                cpuPercent: cpuPercent,
-                cpuColor: cpuColor,
-                colors: colors,
-              ),
-            _ => Row(
-                children: [
-                  Expanded(
-                      child: _StatColumn(
-                    label: 'Konteyner',
-                    value: '$runningCT/$totalCT',
-                    colors: colors,
-                  )),
-                  Container(width: 1, height: 32, color: colors.hairline),
-                  Expanded(
-                      child: _StatColumn(
-                    label: 'Sanal Makine',
-                    value: '$runningVM/$totalVM',
-                    colors: colors,
-                  )),
-                  Container(width: 1, height: 32, color: colors.hairline),
-                  Expanded(
-                      child: _StatColumn(
-                    label: 'Bellek',
-                    value: '%${memPercent.toStringAsFixed(0)}',
-                    colors: colors,
-                    valueColor: memColor,
-                  )),
-                  Container(width: 1, height: 32, color: colors.hairline),
-                  Expanded(
-                      child: _StatColumn(
-                    label: 'CPU',
-                    value: '%${cpuPercent.toStringAsFixed(0)}',
-                    colors: colors,
-                    valueColor: cpuColor,
-                  )),
-                ],
-              ),
-          },
+            ),
+          ),
         ],
       ),
     );
