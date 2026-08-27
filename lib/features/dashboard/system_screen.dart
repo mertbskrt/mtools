@@ -23,6 +23,7 @@ class SystemScreen extends StatefulWidget {
 class _SystemScreenState extends State<SystemScreen> {
   final Map<String, bool> _expandedNodes = {};
   final Map<String, Map<String, bool>> _sectionVisibility = {};
+  String _summaryStyle = 'strip';
 
   @override
   void initState() {
@@ -34,6 +35,7 @@ class _SystemScreenState extends State<SystemScreen> {
     final prefs = await SharedPreferences.getInstance();
     final expandedRaw = prefs.getString('node_expanded_states');
     final sectionRaw = prefs.getString('node_section_visibility');
+    final summaryStyleRaw = prefs.getString('system_summary_style');
     if (!mounted) return;
     if (expandedRaw != null) {
       final Map<String, dynamic> decoded = jsonDecode(expandedRaw);
@@ -49,6 +51,9 @@ class _SystemScreenState extends State<SystemScreen> {
         });
       });
     }
+    if (summaryStyleRaw != null) {
+      setState(() => _summaryStyle = summaryStyleRaw);
+    }
   }
 
   Future<void> _saveExpandedState() async {
@@ -60,6 +65,146 @@ class _SystemScreenState extends State<SystemScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         'node_section_visibility', jsonEncode(_sectionVisibility));
+  }
+
+  Future<void> _saveSummaryStyle() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('system_summary_style', _summaryStyle);
+  }
+
+  void _setSummaryStyle(String style) {
+    setState(() => _summaryStyle = style);
+    _saveSummaryStyle();
+  }
+
+  void _showStylePicker(BuildContext context) {
+    final colors = context.appColors;
+    const styles = {
+      'strip': ('Şerit', 'Kompakt metin sütunları', Icons.view_headline),
+      'circular': ('Dairesel', 'Yüzdesel halka göstergeler', Icons.donut_large_outlined),
+      'cards': ('Kartlar', 'Renkli ikonlu kart ızgarası', Icons.grid_view_rounded),
+    };
+
+    appShowModalBottomSheet(
+      context: context,
+      backgroundColor: colors.surface1,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.md))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModal) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.textMuted.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Icon(Icons.tune_rounded, color: colors.textSecondary, size: 18),
+                  const SizedBox(width: 8),
+                  Text('Gösterim Stili',
+                      style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text('Sistem Özeti bannerının nasıl gösterileceğini seçin',
+                  style: TextStyle(color: colors.textMuted, fontSize: 12)),
+              const SizedBox(height: 16),
+              ...styles.entries.map((e) {
+                final key = e.key;
+                final (label, desc, icon) = e.value;
+                final selected = _summaryStyle == key;
+                return GestureDetector(
+                  key: ValueKey(key),
+                  onTap: () {
+                    _setSummaryStyle(key);
+                    setModal(() {});
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? colors.primary.withValues(alpha: 0.08)
+                          : colors.surface2,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      border: Border.all(
+                        color: selected
+                            ? colors.primary.withValues(alpha: 0.25)
+                            : colors.hairline,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(icon,
+                            color: selected ? colors.primary : colors.textMuted,
+                            size: 18),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(label,
+                                  style: TextStyle(
+                                      color: selected
+                                          ? colors.textPrimary
+                                          : colors.textMuted,
+                                      fontSize: 14,
+                                      fontWeight: selected
+                                          ? FontWeight.w600
+                                          : FontWeight.normal)),
+                              Text(desc,
+                                  style: TextStyle(
+                                      color: colors.textMuted, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        AnimatedContainer(
+                          duration: AppMotion.fast,
+                          curve: AppMotion.curve,
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: selected
+                                ? colors.primary
+                                : Colors.transparent,
+                            border: Border.all(
+                              color: selected
+                                  ? colors.primary
+                                  : colors.textMuted.withValues(alpha: 0.4),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: selected
+                              ? const Icon(Icons.check,
+                                  color: Colors.white, size: 12)
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Map<String, bool> _defaultSections() => {
@@ -779,6 +924,8 @@ class _SystemScreenState extends State<SystemScreen> {
                     runningCT: runningCT,
                     totalVM: totalVM,
                     runningVM: runningVM,
+                    style: _summaryStyle,
+                    onCustomize: () => _showStylePicker(context),
                   ),
                 ),
               ),
@@ -968,6 +1115,8 @@ class _SummaryBanner extends StatelessWidget {
   final List<dynamic> nodes;
   final ProxmoxProvider provider;
   final int totalCT, runningCT, totalVM, runningVM;
+  final String style;
+  final VoidCallback onCustomize;
 
   const _SummaryBanner({
     required this.nodes,
@@ -976,6 +1125,8 @@ class _SummaryBanner extends StatelessWidget {
     required this.runningCT,
     required this.totalVM,
     required this.runningVM,
+    required this.style,
+    required this.onCustomize,
   });
 
   @override
@@ -984,16 +1135,28 @@ class _SummaryBanner extends StatelessWidget {
     final onlineCount = nodes.where((n) => n['status'] == 'online').length;
 
     int totalMem = 0, usedMem = 0;
+    double cpuSum = 0;
+    int cpuCount = 0;
     for (final node in nodes) {
       final name = node['node'] as String;
-      final status = provider.nodeStatuses[name] ?? {};
-      totalMem += (status['memory']?['total'] ?? 0) as int;
-      usedMem += (status['memory']?['used'] ?? 0) as int;
+      final status = provider.nodeStatuses[name];
+      totalMem += (status?['memory']?['total'] ?? 0) as int;
+      usedMem += (status?['memory']?['used'] ?? 0) as int;
+      // Ortalama sadece verisi olan (online) node'lar üzerinden alınıyor —
+      // offline node'ların boş status map'i ortalamayı yanlışlıkla aşağı
+      // çekmesin diye (bellek toplamında bu sorun yok, çünkü hem pay hem
+      // payda 0 alıyor, ama CPU bir ORTALAMA olduğu için sayaç şart).
+      if (status != null && status['cpu'] != null) {
+        cpuSum += (status['cpu'] as num) * 100;
+        cpuCount++;
+      }
     }
     final memPercent = totalMem > 0 ? usedMem / totalMem * 100 : 0.0;
+    final cpuPercent = cpuCount > 0 ? cpuSum / cpuCount : 0.0;
 
     final allOnline = onlineCount == nodes.length;
     final memColor = colors.thresholdColor(memPercent);
+    final cpuColor = colors.thresholdColor(cpuPercent);
 
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
@@ -1009,6 +1172,11 @@ class _SummaryBanner extends StatelessWidget {
               Icon(Icons.dashboard_outlined, color: colors.textSecondary, size: 16),
               const SizedBox(width: AppSpace.sm),
               Text('Sistem Özeti', style: colors.body.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: onCustomize,
+                child: Icon(Icons.tune_rounded, color: colors.textMuted, size: 15),
+              ),
               const Spacer(),
               StatusIndicator(
                 color: allOnline ? colors.success : colors.warning,
@@ -1018,33 +1186,256 @@ class _SummaryBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpace.md),
-          Row(
-            children: [
-              Expanded(
-                  child: _StatColumn(
-                label: 'Konteyner',
-                value: '$runningCT/$totalCT',
+          switch (style) {
+            'circular' => _SummaryCircularRow(
+                totalCT: totalCT,
+                runningCT: runningCT,
+                totalVM: totalVM,
+                runningVM: runningVM,
+                memPercent: memPercent,
+                memColor: memColor,
+                cpuPercent: cpuPercent,
+                cpuColor: cpuColor,
                 colors: colors,
-              )),
-              Container(width: 1, height: 32, color: colors.hairline),
-              Expanded(
-                  child: _StatColumn(
-                label: 'Sanal Makine',
-                value: '$runningVM/$totalVM',
+              ),
+            'cards' => _SummaryCardGrid(
+                totalCT: totalCT,
+                runningCT: runningCT,
+                totalVM: totalVM,
+                runningVM: runningVM,
+                memPercent: memPercent,
+                memColor: memColor,
+                cpuPercent: cpuPercent,
+                cpuColor: cpuColor,
                 colors: colors,
-              )),
-              Container(width: 1, height: 32, color: colors.hairline),
-              Expanded(
-                  child: _StatColumn(
-                label: 'Bellek',
-                value: '%${memPercent.toStringAsFixed(0)}',
-                colors: colors,
-                valueColor: memColor,
-              )),
-            ],
-          ),
+              ),
+            _ => Row(
+                children: [
+                  Expanded(
+                      child: _StatColumn(
+                    label: 'Konteyner',
+                    value: '$runningCT/$totalCT',
+                    colors: colors,
+                  )),
+                  Container(width: 1, height: 32, color: colors.hairline),
+                  Expanded(
+                      child: _StatColumn(
+                    label: 'Sanal Makine',
+                    value: '$runningVM/$totalVM',
+                    colors: colors,
+                  )),
+                  Container(width: 1, height: 32, color: colors.hairline),
+                  Expanded(
+                      child: _StatColumn(
+                    label: 'Bellek',
+                    value: '%${memPercent.toStringAsFixed(0)}',
+                    colors: colors,
+                    valueColor: memColor,
+                  )),
+                  Container(width: 1, height: 32, color: colors.hairline),
+                  Expanded(
+                      child: _StatColumn(
+                    label: 'CPU',
+                    value: '%${cpuPercent.toStringAsFixed(0)}',
+                    colors: colors,
+                    valueColor: cpuColor,
+                  )),
+                ],
+              ),
+          },
         ],
       ),
+    );
+  }
+}
+
+/// Dairesel gösterim stili: her metrik için native `CircularProgressIndicator`
+/// tabanlı küçük bir halka (yeni bağımlılık yok, proje genelinde zaten
+/// kullanılan widget) + ortasında değer, altında etiket.
+class _SummaryCircularRow extends StatelessWidget {
+  final int totalCT, runningCT, totalVM, runningVM;
+  final double memPercent, cpuPercent;
+  final Color memColor, cpuColor;
+  final AppThemeData colors;
+
+  const _SummaryCircularRow({
+    required this.totalCT,
+    required this.runningCT,
+    required this.totalVM,
+    required this.runningVM,
+    required this.memPercent,
+    required this.memColor,
+    required this.cpuPercent,
+    required this.cpuColor,
+    required this.colors,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ctRatio = totalCT > 0 ? runningCT / totalCT : 0.0;
+    final vmRatio = totalVM > 0 ? runningVM / totalVM : 0.0;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _CircularStat(
+            value: ctRatio,
+            centerText: '$runningCT/$totalCT',
+            color: colors.primary,
+            label: 'Konteyner',
+            colors: colors,
+          ),
+        ),
+        Expanded(
+          child: _CircularStat(
+            value: vmRatio,
+            centerText: '$runningVM/$totalVM',
+            color: colors.primary,
+            label: 'Sanal Makine',
+            colors: colors,
+          ),
+        ),
+        Expanded(
+          child: _CircularStat(
+            value: (memPercent / 100).clamp(0.0, 1.0),
+            centerText: '%${memPercent.toStringAsFixed(0)}',
+            color: memColor,
+            label: 'Bellek',
+            colors: colors,
+          ),
+        ),
+        Expanded(
+          child: _CircularStat(
+            value: (cpuPercent / 100).clamp(0.0, 1.0),
+            centerText: '%${cpuPercent.toStringAsFixed(0)}',
+            color: cpuColor,
+            label: 'CPU',
+            colors: colors,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CircularStat extends StatelessWidget {
+  final double value;
+  final String centerText;
+  final Color color;
+  final String label;
+  final AppThemeData colors;
+
+  const _CircularStat({
+    required this.value,
+    required this.centerText,
+    required this.color,
+    required this.label,
+    required this.colors,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          width: 52,
+          height: 52,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value: value,
+                strokeWidth: 5,
+                backgroundColor: colors.surface2,
+                valueColor: AlwaysStoppedAnimation(color),
+              ),
+              Text(centerText,
+                  style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(label, style: colors.meta),
+      ],
+    );
+  }
+}
+
+/// Kartlar gösterim stili: aynı dosyada zaten var olan `_StatCard`
+/// (ikon + renkli kutu + büyük değer + etiket) 2×2 ızgarada.
+class _SummaryCardGrid extends StatelessWidget {
+  final int totalCT, runningCT, totalVM, runningVM;
+  final double memPercent, cpuPercent;
+  final Color memColor, cpuColor;
+  final AppThemeData colors;
+
+  const _SummaryCardGrid({
+    required this.totalCT,
+    required this.runningCT,
+    required this.totalVM,
+    required this.runningVM,
+    required this.memPercent,
+    required this.memColor,
+    required this.cpuPercent,
+    required this.cpuColor,
+    required this.colors,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                label: 'Konteyner',
+                value: '$runningCT/$totalCT',
+                color: colors.primary,
+                colors: colors,
+                icon: Icons.widgets_outlined,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _StatCard(
+                label: 'Sanal Makine',
+                value: '$runningVM/$totalVM',
+                color: colors.primary,
+                colors: colors,
+                icon: Icons.dns_outlined,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                label: 'Bellek',
+                value: '%${memPercent.toStringAsFixed(0)}',
+                color: memColor,
+                colors: colors,
+                icon: Icons.memory,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _StatCard(
+                label: 'CPU',
+                value: '%${cpuPercent.toStringAsFixed(0)}',
+                color: cpuColor,
+                colors: colors,
+                icon: Icons.speed_outlined,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
