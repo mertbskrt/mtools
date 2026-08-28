@@ -831,7 +831,13 @@ class ProxmoxProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _silentRefreshUntil({
+  /// Hedef duruma ulaşıldığını DOĞRULARSA `true`, `maxAttempts` sonunda hâlâ
+  /// doğrulanamadıysa (zaman aşımı) `false` döner — çağıran bu ayrımı honest
+  /// bir "Tamamlandı!" / "Komut Gönderildi ama teyit edilemedi" mesajına
+  /// çevirmeli. Önceden bu fonksiyon zaman aşımında da sessizce dönüyordu ve
+  /// çağıranlar hep "Tamamlandı!" gösteriyordu — rebootNode/shutdownNode'un
+  /// zaten kullandığı dürüst-belirsizlik prensibiyle tutarsızdı.
+  Future<bool> _silentRefreshUntil({
     required String node,
     required int vmid,
     required String targetStatus,
@@ -869,7 +875,7 @@ class ProxmoxProvider extends ChangeNotifier {
         final currentStatus = target?['status'] as String? ?? '';
         if (currentStatus == targetStatus) {
           _applyFreshData(freshData);
-          return;
+          return true;
         }
       } catch (e) {
         // Bilinçli sessiz: tek bir poll denemesinin başarısız olması normal
@@ -893,6 +899,7 @@ class ProxmoxProvider extends ChangeNotifier {
       // düştü — bu, vazgeçmeden önceki son iyi-niyet yenilemesi, o da
       // başarısız olursa raporlanacak yeni bir bilgi yok.
     }
+    return false;
   }
 
   // ── Container / VM işlemleri ──────────────────────────────────────────────
@@ -915,17 +922,20 @@ class ProxmoxProvider extends ChangeNotifier {
         subMessage: 'Başlatma komutu gönderildi...',
         progress: 0.3,
       );
-      await _silentRefreshUntil(
+      final confirmed = await _silentRefreshUntil(
           node: node, vmid: vmid, targetStatus: 'running', isLxc: isLxc);
       _setOperation(
         inProgress: true,
-        message: 'Tamamlandı!',
-        subMessage:
-            isLxc ? 'Konteyner çalışıyor.' : 'Sanal makine çalışıyor.',
+        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+        subMessage: confirmed
+            ? (isLxc ? 'Konteyner çalışıyor.' : 'Sanal makine çalışıyor.')
+            : (isLxc
+                ? 'Başlatma komutu gönderildi ama durum doğrulanamadı — konteyner birkaç dakika içinde çalışır duruma gelmiş olabilir.'
+                : 'Başlatma komutu gönderildi ama durum doğrulanamadı — sanal makine birkaç dakika içinde çalışır duruma gelmiş olabilir.'),
         progress: 1.0,
         success: true,
       );
-      await Future.delayed(const Duration(milliseconds: 1200));
+      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -955,17 +965,20 @@ class ProxmoxProvider extends ChangeNotifier {
         subMessage: 'Durdurma komutu gönderildi...',
         progress: 0.3,
       );
-      await _silentRefreshUntil(
+      final confirmed = await _silentRefreshUntil(
           node: node, vmid: vmid, targetStatus: 'stopped', isLxc: isLxc);
       _setOperation(
         inProgress: true,
-        message: 'Tamamlandı!',
-        subMessage:
-            isLxc ? 'Konteyner durduruldu.' : 'Sanal makine durduruldu.',
+        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+        subMessage: confirmed
+            ? (isLxc ? 'Konteyner durduruldu.' : 'Sanal makine durduruldu.')
+            : (isLxc
+                ? 'Durdurma komutu gönderildi ama durum doğrulanamadı — konteyner birkaç dakika içinde durmuş olabilir.'
+                : 'Durdurma komutu gönderildi ama durum doğrulanamadı — sanal makine birkaç dakika içinde durmuş olabilir.'),
         progress: 1.0,
         success: true,
       );
-      await Future.delayed(const Duration(milliseconds: 1200));
+      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -996,20 +1009,25 @@ class ProxmoxProvider extends ChangeNotifier {
         subMessage: 'Yeniden başlatma komutu gönderildi...',
         progress: 0.3,
       );
-      await _silentRefreshUntil(
+      final stoppedConfirmed = await _silentRefreshUntil(
           node: node, vmid: vmid, targetStatus: 'stopped', isLxc: isLxc);
-      await _silentRefreshUntil(
+      final runningConfirmed = await _silentRefreshUntil(
           node: node, vmid: vmid, targetStatus: 'running', isLxc: isLxc);
+      final confirmed = stoppedConfirmed && runningConfirmed;
       _setOperation(
         inProgress: true,
-        message: 'Tamamlandı!',
-        subMessage: isLxc
-            ? 'Konteyner yeniden başlatıldı.'
-            : 'Sanal makine yeniden başlatıldı.',
+        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+        subMessage: confirmed
+            ? (isLxc
+                ? 'Konteyner yeniden başlatıldı.'
+                : 'Sanal makine yeniden başlatıldı.')
+            : (isLxc
+                ? 'Yeniden başlatma komutu gönderildi ama durum doğrulanamadı — konteyner birkaç dakika içinde çalışır duruma gelmiş olabilir.'
+                : 'Yeniden başlatma komutu gönderildi ama durum doğrulanamadı — sanal makine birkaç dakika içinde çalışır duruma gelmiş olabilir.'),
         progress: 1.0,
         success: true,
       );
-      await Future.delayed(const Duration(milliseconds: 1200));
+      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -1146,16 +1164,20 @@ class ProxmoxProvider extends ChangeNotifier {
         subMessage: 'Silme işlemi devam ediyor...',
         progress: 0.5,
       );
-      await _waitUntilGone(node: node, vmid: vmid, isLxc: isLxc);
+      final confirmed =
+          await _waitUntilGone(node: node, vmid: vmid, isLxc: isLxc);
       _setOperation(
         inProgress: true,
-        message: 'Tamamlandı!',
-        subMessage:
-            isLxc ? 'Konteyner silindi.' : 'Sanal makine silindi.',
+        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+        subMessage: confirmed
+            ? (isLxc ? 'Konteyner silindi.' : 'Sanal makine silindi.')
+            : (isLxc
+                ? 'Silme komutu gönderildi ama tamamlandığı doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'
+                : 'Silme komutu gönderildi ama tamamlandığı doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'),
         progress: 1.0,
         success: true,
       );
-      await Future.delayed(const Duration(milliseconds: 1200));
+      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -1166,7 +1188,10 @@ class ProxmoxProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _waitUntilGone({
+  /// Konteyner/VM'in listeden gerçekten kaybolduğunu DOĞRULARSA `true`,
+  /// zaman aşımında `false` — bkz. `_silentRefreshUntil` üzerindeki not,
+  /// aynı dürüst-belirsizlik gerekçesi silme için de geçerli.
+  Future<bool> _waitUntilGone({
     required String node,
     required int vmid,
     required bool isLxc,
@@ -1193,7 +1218,7 @@ class ProxmoxProvider extends ChangeNotifier {
         final list = isLxc ? lxcList : vmList;
         if (!list.any((item) => item['vmid'] == vmid)) {
           _applyFreshData(freshData);
-          return;
+          return true;
         }
       } catch (e) {
         // Bilinçli sessiz: tek bir poll denemesinin başarısız olması normal
@@ -1209,6 +1234,7 @@ class ProxmoxProvider extends ChangeNotifier {
       // önce son bir kez taze veri denenir, o da başarısız olursa raporlanacak
       // yeni bir bilgi yok.
     }
+    return false;
   }
 
   Future<void> reorderNodes(int oldIndex, int newIndex) async {

@@ -88,6 +88,20 @@ class _CreateVMScreenState extends State<CreateVMScreen> {
     final colors = context.appColors;
     if (!_formKey.currentState!.validate()) return;
     if (_selectedNode == null) return;
+    if (_selectedISO == null) {
+      // ISO seçilmeden gönderilirse Proxmox API'ye boş bir 'ide2' drive spec'i
+      // ('media=cdrom' önünde sürücü yolu olmadan) gidiyor ve sunucu bunu
+      // reddediyor — kullanıcı ham bir API hatası yerine burada net bir
+      // mesaj görsün diye önden engelleniyor.
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Lütfen bir ISO seçin'),
+        backgroundColor: colors.error,
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      ));
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -353,7 +367,7 @@ class _OsTypeSelector extends StatelessWidget {
               border: Border.all(
                 color: isSelected
                     ? colors.primary.withValues(alpha: 0.5)
-                    : Colors.white.withValues(alpha: 0.06),
+                    : colors.hairline,
               ),
             ),
             child: Row(

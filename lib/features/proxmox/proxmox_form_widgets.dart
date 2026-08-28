@@ -119,7 +119,7 @@ class _ProxmoxFormFieldState extends State<ProxmoxFormField> {
                 border: Border.all(
                   color: _focused
                       ? widget.colors.primary.withValues(alpha: 0.6)
-                      : Colors.white.withValues(alpha: 0.06),
+                      : widget.colors.hairline,
                   width: _focused ? 1.5 : 1,
                 ),
                 boxShadow: _focused
@@ -245,7 +245,7 @@ class ProxmoxDropdownField extends StatelessWidget {
         decoration: BoxDecoration(
           color: colors.bgCard,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          border: Border.all(color: colors.hairline),
         ),
         child: DropdownButtonFormField<String>(
           initialValue: value,
@@ -319,7 +319,7 @@ class ProxmoxNodeSelector extends StatelessWidget {
               border: Border.all(
                 color: isSelected
                     ? colors.primary.withValues(alpha: 0.5)
-                    : Colors.white.withValues(alpha: 0.06),
+                    : colors.hairline,
                 width: isSelected ? 1.5 : 1,
               ),
               boxShadow: isSelected
@@ -479,7 +479,7 @@ class ProxmoxSwitchTile extends StatelessWidget {
           border: Border.all(
             color: value
                 ? colors.primary.withValues(alpha: 0.25)
-                : Colors.white.withValues(alpha: 0.05),
+                : colors.hairline,
           ),
         ),
         child: Row(
@@ -532,7 +532,7 @@ class ProxmoxSwitchTile extends StatelessWidget {
                 border: Border.all(
                   color: value
                       ? colors.primary
-                      : Colors.white.withValues(alpha: 0.1),
+                      : colors.hairline,
                 ),
               ),
               child: AnimatedAlign(
@@ -593,7 +593,7 @@ class ProxmoxSliderField extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.bgCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: colors.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

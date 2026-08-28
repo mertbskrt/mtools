@@ -858,7 +858,7 @@ class _ContainerRow extends StatelessWidget {
     final status = item['status'] ?? 'unknown';
     final isRunning = status == 'running';
     final cpu = ((item['cpu'] ?? 0) * 100).toDouble();
-    final maxmem = (item['maxmem'] ?? 1) as int;
+    final maxmem = (item['maxmem'] ?? 0) as int;
     final mem = (item['mem'] ?? 0) as int;
     final memPercent = maxmem > 0 ? mem / maxmem * 100 : 0.0;
     final uptime = item['uptime'] as int? ?? 0;

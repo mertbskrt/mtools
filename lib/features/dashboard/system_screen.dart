@@ -1132,7 +1132,17 @@ class _SummaryBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final onlineCount = nodes.where((n) => n['status'] == 'online').length;
+    // provider.unreachableNodeNames'i AYRICA dışlıyoruz — bu turda erişilemeyen
+    // bir node, kaybolmasın diye eski (genelde 'online') önbellek durumuyla
+    // `nodes` listesinde tutulmaya devam ediyor (bkz. proxmox_provider.dart
+    // _fetchAllData). Bu kontrol olmadan banner "X/X Makine · online" yeşil
+    // gösterirken hemen altında aynı node için turuncu "Erişilemiyor" kartı
+    // görünebiliyordu — birbiriyle çelişen iki durum.
+    final onlineCount = nodes
+        .where((n) =>
+            n['status'] == 'online' &&
+            !provider.unreachableNodeNames.contains(n['node']))
+        .length;
 
     int totalMem = 0, usedMem = 0;
     double cpuSum = 0;
@@ -2282,7 +2292,11 @@ class _NodeCard extends StatelessWidget {
               ],
 
               // ── Depolama ──
-              if ((sections['storage'] ?? true) && storages.isNotEmpty) ...[
+              // isNotEmpty kontrolü FİLTRELENMİŞ (active==1) listeye göre —
+              // ham listede depolama olup hepsi pasifse başlık, altında hiç
+              // satır olmadan boş görünürdü.
+              if ((sections['storage'] ?? true) &&
+                  storages.any((s) => s['active'] == 1)) ...[
                 _SectionHeader(
                   title: 'Depolama',
                   icon: Icons.folder_rounded,
@@ -2428,7 +2442,13 @@ class _NodeCard extends StatelessWidget {
               ],
 
               // ── Ağ Arayüzleri ──
-              if ((sections['network'] ?? true) && networks.isNotEmpty) ...[
+              // isNotEmpty kontrolü FİLTRELENMİŞ listeye göre — ham listede
+              // arayüz olup hepsi OVSBridge/adressiz (DHCP) ise başlık,
+              // altında hiç satır olmadan boş görünürdü.
+              if ((sections['network'] ?? true) &&
+                  networks.any((n) =>
+                      n['type'] != 'OVSBridge' &&
+                      (n['address'] != null || n['address6'] != null))) ...[
                 _SectionHeader(
                   title: 'Ağ Arayüzleri',
                   icon: Icons.lan_rounded,
@@ -3015,9 +3035,25 @@ class _MetricHistorySheetState extends State<_MetricHistorySheet>
     final colors = context.appColors;
     final color = _metricColor(context);
 
-    final validPoints = widget.rrd
-        .where((p) => p != null && p['time'] != null)
-        .map((p) => _getValue(p as Map<String, dynamic>))
+    final validPoints = <double>[];
+    // "Son Değerler" listesindeki "X dk önce" etiketleri için — index'e göre
+    // sabit bir aralık (ör. "her nokta 2dk") VARSAYMAK yerine, Proxmox'un
+    // her RRD noktasıyla birlikte döndürdüğü GERÇEK unix zaman damgasını
+    // (container_detail_page.dart'taki _RrdPoint ile aynı birim: saniye)
+    // kullanıyoruz — aralarında validPoints ile index-hizalı kalıyor.
+    final validTimes = <int>[];
+    for (final p in widget.rrd) {
+      if (p == null || p['time'] == null) continue;
+      final m = p as Map<String, dynamic>;
+      validPoints.add(_getValue(m));
+      validTimes.add((m['time'] as num).toInt());
+    }
+    // "Son Değerler" listesinde gösterilecek en fazla 8 nokta, en yeniden
+    // en eskiye.
+    final recentPoints = List.generate(validPoints.length,
+            (i) => (val: validPoints[i], time: validTimes[i]))
+        .reversed
+        .take(8)
         .toList();
 
     final avg = validPoints.isEmpty
@@ -3213,16 +3249,19 @@ class _MetricHistorySheetState extends State<_MetricHistorySheet>
                   border: Border.all(color: colors.hairline),
                 ),
                 child: Column(
-                  children: validPoints.reversed
-                      .take(8)
-                      .toList()
+                  children: recentPoints
                       .asMap()
                       .entries
                       .map((e) {
                     final idx = e.key;
-                    final val = e.value;
-                    final isLast = idx == validPoints.take(8).length - 1;
+                    final val = e.value.val;
+                    final sampleTime = e.value.time;
+                    final isLast = idx == recentPoints.length - 1;
                     final barColor = colors.thresholdColor(val);
+                    final minutesAgo = DateTime.now()
+                        .difference(DateTime.fromMillisecondsSinceEpoch(
+                            sampleTime * 1000))
+                        .inMinutes;
                     return Column(
                       key: ValueKey(idx),
                       children: [
@@ -3232,7 +3271,11 @@ class _MetricHistorySheetState extends State<_MetricHistorySheet>
                           child: Row(
                             children: [
                               Text(
-                                idx == 0 ? 'Şimdi' : '${idx * 2} dk önce',
+                                idx == 0
+                                    ? 'Şimdi'
+                                    : minutesAgo <= 0
+                                        ? '<1 dk önce'
+                                        : '$minutesAgo dk önce',
                                 style: TextStyle(
                                     color: idx == 0
                                         ? colors.textPrimary

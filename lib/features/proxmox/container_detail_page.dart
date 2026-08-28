@@ -231,15 +231,42 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
 
   @override
   Widget build(BuildContext context) {
+    // widget.item, sayfa AÇILIRKEN alınan SABİT bir kopya — provider'ın
+    // arka planda ~30sn'de bir tazelediği canlı veriyi hiç yansıtmıyordu,
+    // sayfa açık kalırken CPU/RAM/disk/uptime sonsuza kadar donuk
+    // kalıyordu. AnimatedBuilder ile her provider bildiriminde (arkaplan
+    // yenilemesi VEYA bir işlem tamamlandığında) vmid'ye göre GÜNCEL
+    // kaydı arıyoruz; bulunamazsa (ör. node bu turda erişilemez) açılıştaki
+    // sabit kopyaya düşüyoruz.
+    return AnimatedBuilder(
+      animation: widget.provider,
+      builder: (context, _) {
+        final liveList = widget.isLxc
+            ? widget.provider.nodeLXCs[widget.nodeName]
+            : widget.provider.nodeVMs[widget.nodeName];
+        Map<String, dynamic>? liveItem;
+        if (liveList != null) {
+          for (final i in liveList) {
+            if (i['vmid'] == widget.item['vmid']) {
+              liveItem = i as Map<String, dynamic>;
+              break;
+            }
+          }
+        }
+        return _buildBody(context, liveItem ?? widget.item);
+      },
+    );
+  }
+
+  Widget _buildBody(BuildContext context, Map<String, dynamic> item) {
     final colors = context.appColors;
-    final item = widget.item;
 
     final vmid = item['vmid'] as int;
     final name = item['name'] ?? 'CT $vmid';
     final status = item['status'] ?? 'unknown';
     final isRunning = status == 'running';
     final cpu = ((item['cpu'] ?? 0) * 100).toDouble();
-    final maxmem = (item['maxmem'] ?? 1) as int;
+    final maxmem = (item['maxmem'] ?? 0) as int;
     final mem = (item['mem'] ?? 0) as int;
     final maxdisk = (item['maxdisk'] ?? 0) as int;
     final disk = (item['disk'] ?? 0) as int;
@@ -427,26 +454,22 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
       bottomNavigationBar: _buildActionBar(context, colors, isRunning, vmid),
     );
 
+    // Ayrı bir iç AnimatedBuilder'a gerek yok — bu metot zaten dıştaki
+    // (build()'daki) AnimatedBuilder'ın builder'ı içinde çağrılıyor, o da
+    // widget.provider'daki her değişiklikte (overlay dahil) yeniden çiziyor.
     return Stack(
       children: [
         scaffold,
-        AnimatedBuilder(
-          animation: widget.provider,
-          builder: (context, _) {
-            if (!widget.provider.isOperationInProgress) {
-              return const SizedBox.shrink();
-            }
-            return Positioned.fill(
-              child: OperationOverlay(
-                message: widget.provider.operationMessage,
-                subMessage: widget.provider.operationSubMessage,
-                progress: widget.provider.operationProgress,
-                success: widget.provider.operationSuccess,
-                isError: widget.provider.operationIsError,
-              ),
-            );
-          },
-        ),
+        if (widget.provider.isOperationInProgress)
+          Positioned.fill(
+            child: OperationOverlay(
+              message: widget.provider.operationMessage,
+              subMessage: widget.provider.operationSubMessage,
+              progress: widget.provider.operationProgress,
+              success: widget.provider.operationSuccess,
+              isError: widget.provider.operationIsError,
+            ),
+          ),
       ],
     );
   }

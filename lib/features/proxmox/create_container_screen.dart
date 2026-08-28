@@ -95,7 +95,20 @@ class _CreateContainerScreenState extends State<CreateContainerScreen> {
   Future<void> _create() async {
     final colors = context.appColors;
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedNode == null || _selectedTemplate == null) return;
+    if (_selectedNode == null) return;
+    if (_selectedTemplate == null) {
+      // Şablon seçilmeden buton önceden sessizce hiçbir şey yapmıyordu —
+      // node'da hiç şablon yoksa "Konteyner Oluştur" tıklanınca görünürde
+      // hiçbir tepki vermeden bozuk gibi duruyordu.
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Lütfen bir konteyner şablonu seçin'),
+        backgroundColor: colors.error,
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+      ));
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -324,7 +337,7 @@ class _CreateContainerScreenState extends State<CreateContainerScreen> {
               decoration: BoxDecoration(
                 color: colors.bgCard,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                border: Border.all(color: colors.hairline),
               ),
               child: Row(
                 children: [
