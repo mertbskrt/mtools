@@ -125,3 +125,14 @@ odaklıydı. Emülatör o zamandan beri "kredi tasarrufu için" devre dışı;
 bu oturumdaki sonraki tüm değişiklikler (widget denetimleri, bildirim
 motoru denetimi, Sistem/Proxmox hata taraması, node-kimliği refactoru)
 hiçbirinin ayrıca canlı bir cihaz/emülatör turu görmedi.
+
+### 13. Görev-tabanlı doğrulama (`c40ea48`) — gerçek başarısız senaryo
+CT/VM işlemlerinin (başlat/durdur/yeniden-başlat/sil/yedekten-geri-yükle)
+üç-yönlü sonuç sınıflandırması (kesin başarı / kesin başarısızlık +
+Proxmox'un kendi hata metni / gerçekten belirsiz — bağlantı görev
+izlenirken koptuysa) henüz gerçek bir BAŞARISIZ senaryoyla (ör. bozuk
+bir CT config'i, dolu bir disk, kilitli bir CT) hiç test edilmedi —
+sadece başarı yolu (ve kod incelemesiyle üç dalın mantığı) doğrulandı.
+Özellikle "kesin başarısızlık" dalının gösterdiği hata metninin gerçek
+Proxmox `exitstatus` çıktısıyla okunabilir/anlamlı eşleştiği hiç
+görülmedi.
