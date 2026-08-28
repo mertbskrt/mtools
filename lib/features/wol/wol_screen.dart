@@ -529,12 +529,17 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
       // relayNode yeni kayıtlarda bileşik id (host+node), eski kayıtlarda
       // (yükseltme öncesi) çıplak node adı olabilir — ikisini de kabul
       // etmek için önce tam id eşleşmesi, olmazsa ham ad eşleşmesi denenir.
+      // KRİTİK: nodeNameFromId HER İKİ tarafa da uygulanmalı — relayNode
+      // kendisi de (host değiştiyse) ESKİ host'lu bir bileşik id olabilir;
+      // sadece id tarafını çıplak ada indirgemek relayNode'un içindeki
+      // eski host önekini asla eşleştiremezdi (sunucu IP/hostname'i
+      // ayarlardan değiştirildiğinde bu yol sessizce kırılırdı).
       final availableIds =
           provider.nodes.map((n) => n['_id'] as String).toList();
       final matchedId = availableIds.contains(relayNode)
           ? relayNode
           : availableIds.firstWhere(
-              (id) => nodeNameFromId(id) == relayNode,
+              (id) => nodeNameFromId(id) == nodeNameFromId(relayNode),
               orElse: () => '');
       if (matchedId.isNotEmpty) {
         try {
@@ -867,7 +872,21 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
       // Kaydet'e bassa bile relay, farkında olmadan _allRelays.first'e
       // değişmiş olurdu — build() bu durumu _staleRelay ile ayrıca
       // kullanıcıya gösterip listede tekrar seçilebilir hale getiriyor.
-      _selectedNode = e!.relayNode;
+      //
+      // İSTİSNA — sunucunun host/IP'si değiştiyse: bileşik kimlik host'u
+      // içerdiği için TAM eşleşme bozulur ama fiziksel node aynıdır. Ad
+      // bazlı bir eşleşme varsa (çakışma yoksa TEK), bunu "stale" olarak
+      // yanlışça işaretlemek yerine TAZE kimliğe sessizce geçiyoruz —
+      // sadece Kaydet'e basınca WOL hedefinin relay'i güncel host'a
+      // otomatik onarılsın diye. Gerçekten kaldırılmış/farklı bir node
+      // için (ad eşleşmesi de yoksa) eski değer olduğu gibi korunuyor.
+      final saved = e!.relayNode;
+      final freshMatch = _allRelays.contains(saved)
+          ? saved
+          : _allRelays.firstWhere(
+              (r) => nodeNameFromId(r) == nodeNameFromId(saved),
+              orElse: () => '');
+      _selectedNode = freshMatch.isNotEmpty ? freshMatch : saved;
     } else if (_allRelays.isNotEmpty) {
       _selectedNode = _allRelays.first;
     }
