@@ -737,6 +737,8 @@ class _SystemScreenState extends State<SystemScreen> {
         maxChildSize: 0.92,
         builder: (ctx, scrollCtrl) => _StorageDetailSheet(
           nodeName: displayName,
+          nodeId: nodeId,
+          provider: provider,
           storage: storage,
           scrollCtrl: scrollCtrl,
         ),
@@ -3525,11 +3527,15 @@ class _AnimatedChartPainter extends CustomPainter {
 
 class _StorageDetailSheet extends StatelessWidget {
   final String nodeName;
+  final String nodeId;
+  final ProxmoxProvider provider;
   final Map<String, dynamic> storage;
   final ScrollController scrollCtrl;
 
   const _StorageDetailSheet({
     required this.nodeName,
+    required this.nodeId,
+    required this.provider,
     required this.storage,
     required this.scrollCtrl,
   });
@@ -3846,8 +3852,260 @@ class _StorageDetailSheet extends StatelessWidget {
                 ),
               ),
             ],
+            if (contentTypes.contains('backup'))
+              _BackupsSection(
+                provider: provider,
+                nodeId: nodeId,
+                storageName: name,
+                colors: colors,
+              ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bir depolamadaki yedekleri listeler, geri yükleme/silme aksiyonlarını
+/// sunar. Proxmox'un content=backup uç noktası ve restoreBackup/
+/// deleteStorageContent daha önce hiçbir ekrandan çağrılmıyordu — bu,
+/// o kodun ilk gerçek kullanıcı arayüzü.
+class _BackupsSection extends StatefulWidget {
+  final ProxmoxProvider provider;
+  final String nodeId;
+  final String storageName;
+  final AppThemeData colors;
+
+  const _BackupsSection({
+    required this.provider,
+    required this.nodeId,
+    required this.storageName,
+    required this.colors,
+  });
+
+  @override
+  State<_BackupsSection> createState() => _BackupsSectionState();
+}
+
+class _BackupsSectionState extends State<_BackupsSection> {
+  late Future<List<dynamic>> _future;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    _future =
+        widget.provider.getStorageContent(widget.nodeId, widget.storageName);
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes >= 1e9) return '${(bytes / 1e9).toStringAsFixed(1)} GB';
+    if (bytes >= 1e6) return '${(bytes / 1e6).toStringAsFixed(1)} MB';
+    return '$bytes B';
+  }
+
+  String _formatDate(int? ctime) {
+    if (ctime == null) return '-';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ctime * 1000);
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(dt.day)}.${two(dt.month)}.${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  Future<void> _restore(Map<String, dynamic> backup) async {
+    final volid = backup['volid'] as String? ?? '';
+    final vmid = backup['vmid'] as int?;
+    if (volid.isEmpty || vmid == null) return;
+    final isLxc = volid.contains('vzdump-lxc-');
+
+    final ok = await showAppConfirmDialog(
+      context: context,
+      title: 'Yedekten geri yüklensin mi?',
+      message:
+          '${isLxc ? 'Konteyner' : 'Sanal makine'} $vmid, bu yedekle ÜZERİNE YAZILARAK geri yüklenecek. Mevcut veriler kaybolur, bu işlem geri alınamaz.',
+      confirmLabel: 'Geri Yükle',
+      isDestructive: true,
+      requireAuth: true,
+      authReason: 'Geri yüklemeyi onaylamak için doğrulayın',
+    );
+    if (!ok || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await widget.provider.restoreBackup(
+        node: widget.nodeId,
+        storage: widget.storageName,
+        volume: volid,
+        vmid: vmid,
+        isLxc: isLxc,
+      );
+      // Sonuç zaten OperationOverlay üzerinde gösteriliyor (bkz.
+      // ProxmoxProvider.restoreBackup) — burada ayrıca göstermeye gerek yok.
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> backup) async {
+    final volid = backup['volid'] as String? ?? '';
+    if (volid.isEmpty) return;
+    final colors = widget.colors;
+
+    final ok = await showAppConfirmDialog(
+      context: context,
+      title: 'Yedek silinsin mi?',
+      message: '${volid.split('/').last} kalıcı olarak silinecek.',
+      confirmLabel: 'Sil',
+      isDestructive: true,
+      requireAuth: true,
+      authReason: 'Silmeyi onaylamak için doğrulayın',
+    );
+    if (!ok || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await widget.provider
+          .deleteStorageContent(widget.nodeId, widget.storageName, volid);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _load();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Hata: $e'),
+          backgroundColor: colors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: colors.surface2,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: colors.hairline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.backup_rounded, color: colors.textSecondary, size: 14),
+              const SizedBox(width: 8),
+              Text('Yedekler',
+                  style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<List<dynamic>>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: colors.primary)),
+                  ),
+                );
+              }
+              final backups = snapshot.data ?? [];
+              if (backups.isEmpty) {
+                return Text('Bu depoda yedek bulunamadı',
+                    style: TextStyle(color: colors.textMuted, fontSize: 12));
+              }
+              return Column(
+                children: backups.asMap().entries.map((e) {
+                  final i = e.key;
+                  final b = e.value as Map<String, dynamic>;
+                  final volid = b['volid'] as String? ?? '';
+                  final vmid = b['vmid'];
+                  final size = (b['size'] ?? 0) as int;
+                  final ctime = b['ctime'] as int?;
+                  final notes = b['notes'] as String? ?? '';
+                  return Column(
+                    key: ValueKey(volid.isEmpty ? i : volid),
+                    children: [
+                      if (i > 0) Divider(height: 16, color: colors.hairline),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                    vmid != null
+                                        ? 'VM/CT $vmid'
+                                        : (volid.isEmpty
+                                            ? 'Yedek'
+                                            : volid.split('/').last),
+                                    style: TextStyle(
+                                        color: colors.textPrimary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 2),
+                                Text(
+                                    '${_formatDate(ctime)} · ${_formatBytes(size)}',
+                                    style: TextStyle(
+                                        color: colors.textMuted, fontSize: 11)),
+                                if (notes.isNotEmpty)
+                                  Text(notes,
+                                      style: TextStyle(
+                                          color: colors.textMuted,
+                                          fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          if (_busy)
+                            SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: colors.primary))
+                          else ...[
+                            IconButton(
+                              icon: Icon(Icons.settings_backup_restore_rounded,
+                                  color: colors.primary, size: 20),
+                              tooltip: 'Geri Yükle',
+                              onPressed:
+                                  vmid != null ? () => _restore(b) : null,
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.delete_outline,
+                                  color: colors.error, size: 20),
+                              tooltip: 'Sil',
+                              onPressed: () => _delete(b),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

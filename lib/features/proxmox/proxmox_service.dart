@@ -407,13 +407,24 @@ class ProxmoxService {
     required bool isLxc,
   }) async {
     final type = isLxc ? 'lxc' : 'qemu';
-    final res = await _dio.post('/nodes/$node/$type', data: {
+    // Proxmox'un CT ve VM geri yükleme şeması farklı: LXC, 'ostemplate' +
+    // 'restore: 1' bekler (aynı /lxc uç noktası CT OLUŞTURMAK için de
+    // kullanılıyor, restore=1 bunu bir "arşivden geri yükle" olarak
+    // ayırt ediyor); QEMU ise sadece 'archive' bekler, 'restore' alanı
+    // yok. İkisini birden göndermek (önceki hatalı davranış) Proxmox'un
+    // "property not defined in schema" ile reddetmesine yol açıyordu.
+    final data = <String, dynamic>{
       'vmid': vmid,
-      'ostemplate': volume,
-      'archive': volume,
       'storage': storage,
       'force': 1,
-    });
+    };
+    if (isLxc) {
+      data['ostemplate'] = volume;
+      data['restore'] = 1;
+    } else {
+      data['archive'] = volume;
+    }
+    final res = await _dio.post('/nodes/$node/$type', data: data);
     _ensureSuccess(res);
     return res.data['data'] ?? '';
   }

@@ -1406,13 +1406,50 @@ class ProxmoxProvider extends ChangeNotifier {
     required int vmid,
     required bool isLxc,
   }) async {
-    await _serviceFor(node).restoreBackup(
-      node: nodeNameFromId(node),
-      storage: storage,
-      volume: volume,
-      vmid: vmid,
-      isLxc: isLxc,
+    _setOperation(
+      inProgress: true,
+      message: isLxc ? 'Konteyner Geri Yükleniyor' : 'Sanal Makine Geri Yükleniyor',
+      subMessage: 'Geri yükleme komutu gönderiliyor...',
+      progress: 0.15,
     );
+    try {
+      final upid = await _serviceFor(node).restoreBackup(
+        node: nodeNameFromId(node),
+        storage: storage,
+        volume: volume,
+        vmid: vmid,
+        isLxc: isLxc,
+      );
+      _setOperation(
+        inProgress: true,
+        message: isLxc ? 'Konteyner Geri Yükleniyor' : 'Sanal Makine Geri Yükleniyor',
+        subMessage: 'Geri yükleme komutu Proxmox\'a iletildi...',
+        progress: 0.3,
+      );
+      final outcome = await _waitForTask(node: node, upid: upid);
+      if (outcome.success == false) {
+        await _setOperationFailed(Exception(outcome.error));
+      } else {
+        final confirmed = outcome.success == true;
+        _setOperation(
+          inProgress: true,
+          message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+          subMessage: confirmed
+              ? (isLxc
+                  ? 'Konteyner yedekten geri yüklendi.'
+                  : 'Sanal makine yedekten geri yüklendi.')
+              : 'Geri yükleme komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.',
+          progress: 1.0,
+          success: true,
+        );
+        await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      }
+    } catch (e) {
+      debugPrint('restoreBackup hatası: $e');
+      await _setOperationFailed(e);
+    } finally {
+      _setOperation(inProgress: false);
+    }
   }
 
   Future<void> sendWakeOnLan(String node, String mac) async {
