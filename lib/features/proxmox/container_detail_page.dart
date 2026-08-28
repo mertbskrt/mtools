@@ -180,16 +180,18 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
     return result;
   }
 
+  /// provider.startContainer/stopContainer/rebootContainer/deleteContainer
+  /// hiçbirinin dışarı fırlatmadığı (hepsi kendi hatasını yakalayıp
+  /// OperationOverlay üzerinde gösteriyor, bkz. proxmox_provider.dart) bir
+  /// try/catch buradaydı — dolayısıyla hep sanki başarılıymış gibi
+  /// sayfadan çıkılıyordu, GERÇEKTEN başarısız bir silme/durdurma sonrası
+  /// bile. Artık provider'ın son işlem durumuna (operationIsError) bakıp
+  /// sadece gerçek bir hata YOKSA sayfadan çıkıyor — kullanıcı hatayı
+  /// overlay'de görüp sayfada kalabiliyor.
   Future<void> _doAction(Future<void> Function() fn) async {
-    try {
-      await fn();
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('İşlem başarısız: $e'),
-        backgroundColor: context.appColors.error,
-      ));
+    await fn();
+    if (mounted && !widget.provider.operationIsError) {
+      Navigator.pop(context);
     }
   }
 
