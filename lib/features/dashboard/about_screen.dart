@@ -508,22 +508,41 @@ class _AboutScreenState extends State<AboutScreen> {
   ];
 
   static const _releaseNotes = [
-    'Wake-on-LAN widget\'ında SSH yöntemli cihazlar için "Gönderildi ✓" '
-        'yalanı düzeltildi — bu cihazlar artık widget\'tan doğrudan '
-        'uygulamayı açıyor, ulaşılamayan yerel ağ paketi göndermiyor.',
-    'Sistem widget\'ı artık çok makine eklendiğinde tüm isimleri '
-        'kaybedip tek bir "3/3" özetine düşmüyor — satır detayı boyuta '
-        'göre kademeli olarak sadeleşiyor.',
-    'Güncelleme diyaloğu ve ekranındaki "yenilikler" metni artık '
-        'markdown işaretlerini olduğu gibi göstermek yerine düzgün '
-        'başlık/madde biçiminde görünüyor; sürüm geçmişi ekranına '
-        'manuel yenileme butonu eklendi.',
-    'Proxmox/AdGuard/UPS/Terminal\'de "sunucuya internet varken '
-        'ulaşılamıyor" ekranları tek, tutarlı bir metne ve görünüme '
-        'kavuştu; Terminal\'in bağlantı hatası bildirimi artık '
-        'Ayarlar\'dan açılıp kapatılabiliyor.',
-    'Arka plan bağlantı kontrolünde nadir bir bildirim çakışması '
-        'düzeltildi.',
+    'Bildirim motorunda 4 güvenilirlik hatası düzeltildi: UPS-çevrimdışı '
+        'bildiriminin bekleme süresi ayarı yok sayılıyordu, node-çevrimdışı '
+        'bildirimleri tutarsız bekleme süresi kullanıyordu, node-tekrar-'
+        'çevrimiçi bildirimi hiç bekleme süresine uymuyordu, Terminal\'in '
+        'bağlantı hatası bildirimi geçmiş ekranıyla senkron bozulabiliyordu.',
+    'UPS widget\'ı dar alanda 2./3. birimi hiçbir iz bırakmadan '
+        'kaybediyordu — düzeltildi, artık Sistem ve Wake-on-LAN '
+        'widget\'ları gibi kendi yapılandırma ekranı da var.',
+    'AdGuard widget\'ı geniş-ama-kısa ya da dar-ama-uzun yerleşimlerde '
+        'fazladan alana rağmen en az detaylı görünüme düşüyordu; koruma '
+        'durumu metni de her zaman yeşil kalıyordu — ikisi de düzeltildi.',
+    'Wake-on-LAN cihaz düzenleme ekranı, kayıtlı relay sunucusu o an '
+        'listede yoksa sessizce başka bir sunucuyla değiştiriyordu — artık '
+        'mevcut seçim korunup uyarılı olarak gösteriliyor.',
+    'Sistem sekmesinde: özet bannerı erişilemeyen bir sunucuyu yanlışlıkla '
+        '"çevrimiçi" gösterebiliyordu, Depolama/Ağ Arayüzleri bölümleri '
+        'bazen boş görünüyordu, geçmiş grafiğindeki zaman etiketleri '
+        'gerçek örnekleme zamanı yerine sabit bir tahmine dayanıyordu.',
+    'Konteyner/VM başlat-durdur-yeniden başlat-sil işlemleri artık '
+        'Proxmox\'un görev sonucunu doğrudan sorguluyor — belirsiz '
+        '"gönderildi" mesajı yerine kesin başarı, gerçek hata metniyle '
+        'kesin başarısızlık ya da (yalnızca bağlantı koparsa) dürüst bir '
+        '"doğrulanamadı" gösteriliyor.',
+    'Konteyner/VM detay sayfası, işlem gerçekten başarısız olsa bile '
+        'hata mesajını okumadan otomatik kapanıyordu — düzeltildi.',
+    'Bir sunucunun host/IP\'si ayarlardan değiştirildiğinde Wake-on-LAN '
+        'relay eşleşmesi sessizce bozuluyordu — düzeltildi.',
+    'İki farklı Proxmox sunucusu aynı node adını raporluyorsa (ör. '
+        'ikisi de "pve") artık verileri karışmıyor, işlemler yanlış '
+        'sunucuya gitmiyor.',
+    'Yeni: Sistem Özeti bannerı artık özelleştirilebilir — şerit, '
+        'dairesel ya da kart görünümü arasında seçim yapılabiliyor, '
+        'CPU/sistem yükü verisi de eklendi.',
+    'Yeni: Depolama detay sayfasına yedekten geri yükleme desteği '
+        'eklendi — yedekleri listele, geri yükle ya da sil.',
   ];
 }
 

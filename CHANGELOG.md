@@ -2,6 +2,25 @@
 
 All notable changes to MTools are documented in this file.
 
+## [3.3.2] — 2026-08-28
+
+### Fixed
+
+- Fixed several notification reliability bugs: the UPS-offline notification's cooldown setting was silently ignored, node-offline notifications used inconsistent cooldown timing depending on how the alert was triggered, node-back-online notifications never respected their cooldown setting, and Terminal's connection-failure notification could fall out of sync with the notification history screen.
+- Fixed the UPS home-screen widget silently dropping the 2nd and 3rd unit with no on-screen indication when space was tight, and added a per-widget configuration screen (matching the System and Wake-on-LAN widgets) to choose which UPS units it shows.
+- Fixed the AdGuard home-screen widget falling back to its least detailed layout on wide-but-short or narrow-but-tall placements even when there was ample room, and fixed its "Protected"/"Unprotected" status text always showing green regardless of the actual protection state.
+- Fixed the Wake-on-LAN device editor silently switching a device's relay server to a different one whenever the originally configured relay wasn't currently in the list (renamed, removed, or not yet synced to this device) — the existing choice is now preserved and clearly flagged instead of silently swapped.
+- Fixed the System tab's summary banner showing "all online" in green while a server directly below it was shown as unreachable, fixed the Storage and Network sections sometimes rendering an empty box with no content, and fixed the resource-history sheet's "X minutes ago" timestamps being based on a fixed guess instead of the real sample time.
+- Fixed start/stop/reboot/delete operations on containers and VMs showing a vague "sent but couldn't confirm" message on any delay — they now query Proxmox's own task status directly and show a definite success, a real failure with Proxmox's own error text, or (only when the connection itself drops mid-check) an honest "couldn't verify" message.
+- Fixed the container/VM detail page closing itself and returning to the list even when an operation had genuinely failed, before you could read the error message.
+- Fixed Wake-on-LAN's relay matching breaking silently after changing a server's host/IP in settings — the same physical server is now recognized automatically instead of requiring the relay to be reselected.
+- Fixed two configured Proxmox servers that happen to report a node with the same name (for example, both left at the default "pve") silently overwriting each other's data and potentially sending an action to the wrong server.
+
+### New
+
+- The System tab's summary banner can now be customized with 3 display styles — strip (default), circular gauges, or a card grid — via a new settings icon next to the title, and now also shows CPU/system load alongside container, VM, and memory stats.
+- Storage detail pages now have a "Backups" section for storages that support it: list backups, restore one (with confirmation and progress feedback), or delete one.
+
 ## [3.3.1] — 2026-08-17
 
 ### Fixed
