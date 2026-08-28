@@ -22,6 +22,19 @@ class UnreachableProxmoxServer {
   UnreachableProxmoxServer({required this.name, required this.host});
 }
 
+/// `ProxmoxProvider._waitForTask`'ın 3 olası sonucu — bkz. o metodun
+/// dokümantasyonu. `success == null` "belirsiz" (görev bitip bitmediği
+/// öğrenilemedi), `success == false` ise Proxmox'un kendisinin bildirdiği
+/// KESİN bir başarısızlık (`error` gerçek metni taşır).
+class _TaskOutcome {
+  final bool? success;
+  final String? error;
+  _TaskOutcome._(this.success, this.error);
+  factory _TaskOutcome.success() => _TaskOutcome._(true, null);
+  factory _TaskOutcome.failure(String error) => _TaskOutcome._(false, error);
+  factory _TaskOutcome.unknown() => _TaskOutcome._(null, null);
+}
+
 class ProxmoxProvider extends ChangeNotifier {
   final List<ProxmoxService> _services = [];
   final Map<String, ProxmoxService> _nodeServiceMap = {};
@@ -38,7 +51,6 @@ class ProxmoxProvider extends ChangeNotifier {
   Map<String, List<dynamic>> nodeNetworks = {};
   Map<String, List<dynamic>> nodeRRDData = {};
   Map<String, Map<String, dynamic>> nodeDiskSmarts = {};
-  Map<String, Map<String, dynamic>> containerConfigs = {};
   Map<String, List<dynamic>> nodeNetstat = {};
 
   bool isLoading = false;
@@ -831,18 +843,32 @@ class ProxmoxProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Hedef duruma ulaşıldığını DOĞRULARSA `true`, `maxAttempts` sonunda hâlâ
-  /// doğrulanamadıysa (zaman aşımı) `false` döner — çağıran bu ayrımı honest
-  /// bir "Tamamlandı!" / "Komut Gönderildi ama teyit edilemedi" mesajına
-  /// çevirmeli. Önceden bu fonksiyon zaman aşımında da sessizce dönüyordu ve
-  /// çağıranlar hep "Tamamlandı!" gösteriyordu — rebootNode/shutdownNode'un
-  /// zaten kullandığı dürüst-belirsizlik prensibiyle tutarsızdı.
-  Future<bool> _silentRefreshUntil({
+  /// Bir Proxmox GÖREVİNİN (start/stop/reboot/delete — hepsi UPID'li bir
+  /// arka plan görevi olarak yürütülür) gerçek sonucunu, CT/VM'in durum
+  /// alanını dolaylı yoklamak yerine görevin kendi `exitstatus`'ünden
+  /// DOĞRUDAN öğrenir — Proxmox'un otoriter cevabı budur.
+  ///
+  /// Üç olası dönüş:
+  /// - `true`: görev bitti VE başarılı oldu (exitstatus == 'OK')
+  /// - `false`: görev bitti AMA başarısız oldu — `_TaskOutcome.error` gerçek
+  ///   Proxmox hata metnini taşır (ör. "CT is locked", "no such volume")
+  /// - `null`: `maxAttempts` sonunda görevin bitip bitmediği bile
+  ///   öğrenilemedi (ör. bağlantı koptu) — bu, "belki başarılı oldu ama
+  ///   doğrulayamadık" anlamına gelen TEK gerçek belirsizlik durumu; komutun
+  ///   Proxmox'a ULAŞTIĞI zaten kesin (aksi halde çağıran hiç buraya
+  ///   gelmezdi, UPID alınmadan önceki hata doğrudan fırlatılıp
+  ///   _setOperationFailed'a düşer).
+  Future<_TaskOutcome> _waitForTask({
     required String node,
-    required int vmid,
-    required String targetStatus,
-    required bool isLxc,
+    required String upid,
   }) async {
+    if (upid.isEmpty) {
+      // Beklenmeyen bir yanıt UPID döndürmediyse doğrulama yapılamaz —
+      // komutun kendisi zaten 2xx ile kabul edildi (aksi halde
+      // _ensureSuccess fırlatırdı), sadece sonucunu izleyemiyoruz.
+      return _TaskOutcome.unknown();
+    }
+
     const maxAttempts = 20;
     const pollInterval = Duration(seconds: 3);
 
@@ -854,41 +880,33 @@ class ProxmoxProvider extends ChangeNotifier {
         inProgress: true,
         message: operationMessage,
         subMessage: attempt == 0
-            ? 'Komut gönderildi, bekleniyor...'
-            : 'Durum kontrol ediliyor... (${attempt + 1}/$maxAttempts)',
+            ? 'Komut Proxmox\'a iletildi, görev izleniyor...'
+            : 'Görev durumu kontrol ediliyor... (${attempt + 1}/$maxAttempts)',
         progress: progress.clamp(0.0, 0.9),
       );
 
       try {
-        final freshData = await _fetchAllData();
-        if (freshData == null) continue;
-
-        final lxcList = freshData['nodeLXCs']?[node] as List? ?? [];
-        final vmList = freshData['nodeVMs']?[node] as List? ?? [];
-        final list = isLxc ? lxcList : vmList;
-
-        final target = list.firstWhere(
-          (item) => item['vmid'] == vmid,
-          orElse: () => null,
-        );
-
-        final currentStatus = target?['status'] as String? ?? '';
-        if (currentStatus == targetStatus) {
-          _applyFreshData(freshData);
-          return true;
+        final status = await _serviceFor(node).getTaskStatus(node, upid);
+        if (status['status'] == 'stopped') {
+          final freshData = await _fetchAllData();
+          if (freshData != null) _applyFreshData(freshData);
+          final exit = status['exitstatus']?.toString() ?? '';
+          if (exit == 'OK') return _TaskOutcome.success();
+          return _TaskOutcome.failure(
+              exit.isEmpty ? 'Görev başarısız oldu' : exit);
         }
       } catch (e) {
         // Bilinçli sessiz: tek bir poll denemesinin başarısız olması normal
         // (geçici ağ gecikmesi) — döngü tekrar dener, nihai zaman aşımı
         // aşağıda zaten loglanıyor.
-        debugPrint('Poll hatası (attempt $attempt): $e');
+        debugPrint('Görev durumu sorgu hatası (attempt $attempt): $e');
       }
     }
 
     ErrorLogService().log(
       type: ErrorLogType.operation,
-      message: 'CT/VM işlemi zaman aşımına uğradı',
-      detail: 'vmid: $vmid, node: $node, hedef: $targetStatus',
+      message: 'Görev durumu doğrulanamadı (zaman aşımı)',
+      detail: 'node: $node, upid: $upid',
     );
 
     try {
@@ -899,7 +917,7 @@ class ProxmoxProvider extends ChangeNotifier {
       // düştü — bu, vazgeçmeden önceki son iyi-niyet yenilemesi, o da
       // başarısız olursa raporlanacak yeni bir bilgi yok.
     }
-    return false;
+    return _TaskOutcome.unknown();
   }
 
   // ── Container / VM işlemleri ──────────────────────────────────────────────
@@ -914,28 +932,33 @@ class ProxmoxProvider extends ChangeNotifier {
       progress: 0.15,
     );
     try {
-      await _serviceFor(node).startVM(node, vmid, isLxc: isLxc);
+      final upid = await _serviceFor(node).startVM(node, vmid, isLxc: isLxc);
       _setOperation(
         inProgress: true,
         message:
             isLxc ? 'Konteyner Başlatılıyor' : 'Sanal Makine Başlatılıyor',
-        subMessage: 'Başlatma komutu gönderildi...',
+        subMessage: 'Başlatma komutu Proxmox\'a iletildi...',
         progress: 0.3,
       );
-      final confirmed = await _silentRefreshUntil(
-          node: node, vmid: vmid, targetStatus: 'running', isLxc: isLxc);
-      _setOperation(
-        inProgress: true,
-        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
-        subMessage: confirmed
-            ? (isLxc ? 'Konteyner çalışıyor.' : 'Sanal makine çalışıyor.')
-            : (isLxc
-                ? 'Başlatma komutu gönderildi ama durum doğrulanamadı — konteyner birkaç dakika içinde çalışır duruma gelmiş olabilir.'
-                : 'Başlatma komutu gönderildi ama durum doğrulanamadı — sanal makine birkaç dakika içinde çalışır duruma gelmiş olabilir.'),
-        progress: 1.0,
-        success: true,
-      );
-      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      final outcome = await _waitForTask(node: node, upid: upid);
+      if (outcome.success == false) {
+        // Proxmox görevi GERÇEKTEN başarısız oldu — belirsiz değil, kesin.
+        await _setOperationFailed(Exception(outcome.error));
+      } else {
+        final confirmed = outcome.success == true;
+        _setOperation(
+          inProgress: true,
+          message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+          subMessage: confirmed
+              ? (isLxc ? 'Konteyner çalışıyor.' : 'Sanal makine çalışıyor.')
+              : (isLxc
+                  ? 'Başlatma komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'
+                  : 'Başlatma komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'),
+          progress: 1.0,
+          success: true,
+        );
+        await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      }
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -956,29 +979,33 @@ class ProxmoxProvider extends ChangeNotifier {
       progress: 0.15,
     );
     try {
-      await _serviceFor(node).stopVM(node, vmid, isLxc: isLxc);
+      final upid = await _serviceFor(node).stopVM(node, vmid, isLxc: isLxc);
       await _markContainerDeliberateOff(node, vmid);
       _setOperation(
         inProgress: true,
         message:
             isLxc ? 'Konteyner Durduruluyor' : 'Sanal Makine Durduruluyor',
-        subMessage: 'Durdurma komutu gönderildi...',
+        subMessage: 'Durdurma komutu Proxmox\'a iletildi...',
         progress: 0.3,
       );
-      final confirmed = await _silentRefreshUntil(
-          node: node, vmid: vmid, targetStatus: 'stopped', isLxc: isLxc);
-      _setOperation(
-        inProgress: true,
-        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
-        subMessage: confirmed
-            ? (isLxc ? 'Konteyner durduruldu.' : 'Sanal makine durduruldu.')
-            : (isLxc
-                ? 'Durdurma komutu gönderildi ama durum doğrulanamadı — konteyner birkaç dakika içinde durmuş olabilir.'
-                : 'Durdurma komutu gönderildi ama durum doğrulanamadı — sanal makine birkaç dakika içinde durmuş olabilir.'),
-        progress: 1.0,
-        success: true,
-      );
-      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      final outcome = await _waitForTask(node: node, upid: upid);
+      if (outcome.success == false) {
+        await _setOperationFailed(Exception(outcome.error));
+      } else {
+        final confirmed = outcome.success == true;
+        _setOperation(
+          inProgress: true,
+          message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+          subMessage: confirmed
+              ? (isLxc ? 'Konteyner durduruldu.' : 'Sanal makine durduruldu.')
+              : (isLxc
+                  ? 'Durdurma komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'
+                  : 'Durdurma komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'),
+          progress: 1.0,
+          success: true,
+        );
+        await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      }
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -1000,34 +1027,38 @@ class ProxmoxProvider extends ChangeNotifier {
       progress: 0.15,
     );
     try {
-      await _serviceFor(node).rebootVM(node, vmid, isLxc: isLxc);
+      // Proxmox'un status/reboot uç noktası TEK bir görev (stop+start'ı
+      // kendi içinde yürütür) — ayrı ayrı "durdu" / "çalışıyor" durumu
+      // yoklamaya gerek yok, tek görev sonucu yeterli.
+      final upid = await _serviceFor(node).rebootVM(node, vmid, isLxc: isLxc);
       _setOperation(
         inProgress: true,
         message: isLxc
             ? 'Konteyner Yeniden Başlatılıyor'
             : 'Sanal Makine Yeniden Başlatılıyor',
-        subMessage: 'Yeniden başlatma komutu gönderildi...',
+        subMessage: 'Yeniden başlatma komutu Proxmox\'a iletildi...',
         progress: 0.3,
       );
-      final stoppedConfirmed = await _silentRefreshUntil(
-          node: node, vmid: vmid, targetStatus: 'stopped', isLxc: isLxc);
-      final runningConfirmed = await _silentRefreshUntil(
-          node: node, vmid: vmid, targetStatus: 'running', isLxc: isLxc);
-      final confirmed = stoppedConfirmed && runningConfirmed;
-      _setOperation(
-        inProgress: true,
-        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
-        subMessage: confirmed
-            ? (isLxc
-                ? 'Konteyner yeniden başlatıldı.'
-                : 'Sanal makine yeniden başlatıldı.')
-            : (isLxc
-                ? 'Yeniden başlatma komutu gönderildi ama durum doğrulanamadı — konteyner birkaç dakika içinde çalışır duruma gelmiş olabilir.'
-                : 'Yeniden başlatma komutu gönderildi ama durum doğrulanamadı — sanal makine birkaç dakika içinde çalışır duruma gelmiş olabilir.'),
-        progress: 1.0,
-        success: true,
-      );
-      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      final outcome = await _waitForTask(node: node, upid: upid);
+      if (outcome.success == false) {
+        await _setOperationFailed(Exception(outcome.error));
+      } else {
+        final confirmed = outcome.success == true;
+        _setOperation(
+          inProgress: true,
+          message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+          subMessage: confirmed
+              ? (isLxc
+                  ? 'Konteyner yeniden başlatıldı.'
+                  : 'Sanal makine yeniden başlatıldı.')
+              : (isLxc
+                  ? 'Yeniden başlatma komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'
+                  : 'Yeniden başlatma komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'),
+          progress: 1.0,
+          success: true,
+        );
+        await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      }
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -1133,8 +1164,6 @@ class ProxmoxProvider extends ChangeNotifier {
       {bool isLxc = true}) async {
     final config =
         await _serviceFor(node).getVMConfig(node, vmid, isLxc: isLxc);
-    containerConfigs['$node-$vmid'] = config;
-    notifyListeners();
     return config;
   }
 
@@ -1153,31 +1182,33 @@ class ProxmoxProvider extends ChangeNotifier {
       progress: 0.2,
     );
     try {
-      if (isLxc) {
-        await _serviceFor(node).deleteLXC(node, vmid);
-      } else {
-        await _serviceFor(node).deleteVM(node, vmid);
-      }
+      final upid = isLxc
+          ? await _serviceFor(node).deleteLXC(node, vmid)
+          : await _serviceFor(node).deleteVM(node, vmid);
       _setOperation(
         inProgress: true,
         message: isLxc ? 'Konteyner Siliniyor' : 'Sanal Makine Siliniyor',
         subMessage: 'Silme işlemi devam ediyor...',
         progress: 0.5,
       );
-      final confirmed =
-          await _waitUntilGone(node: node, vmid: vmid, isLxc: isLxc);
-      _setOperation(
-        inProgress: true,
-        message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
-        subMessage: confirmed
-            ? (isLxc ? 'Konteyner silindi.' : 'Sanal makine silindi.')
-            : (isLxc
-                ? 'Silme komutu gönderildi ama tamamlandığı doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'
-                : 'Silme komutu gönderildi ama tamamlandığı doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'),
-        progress: 1.0,
-        success: true,
-      );
-      await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      final outcome = await _waitForTask(node: node, upid: upid);
+      if (outcome.success == false) {
+        await _setOperationFailed(Exception(outcome.error));
+      } else {
+        final confirmed = outcome.success == true;
+        _setOperation(
+          inProgress: true,
+          message: confirmed ? 'Tamamlandı!' : 'Komut Gönderildi',
+          subMessage: confirmed
+              ? (isLxc ? 'Konteyner silindi.' : 'Sanal makine silindi.')
+              : (isLxc
+                  ? 'Silme komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'
+                  : 'Silme komutu Proxmox\'a iletildi ama sonucu doğrulanamadı — birkaç dakika sonra tekrar kontrol edin.'),
+          progress: 1.0,
+          success: true,
+        );
+        await Future.delayed(Duration(milliseconds: confirmed ? 1200 : 1800));
+      }
     } catch (e) {
       // Bilinçli sessiz: hata zaten _setOperationFailed ile kullanıcıya
       // OperationOverlay üzerinde gösteriliyor — burada tekrar loglamak gürültü olur.
@@ -1186,55 +1217,6 @@ class ProxmoxProvider extends ChangeNotifier {
     } finally {
       _setOperation(inProgress: false);
     }
-  }
-
-  /// Konteyner/VM'in listeden gerçekten kaybolduğunu DOĞRULARSA `true`,
-  /// zaman aşımında `false` — bkz. `_silentRefreshUntil` üzerindeki not,
-  /// aynı dürüst-belirsizlik gerekçesi silme için de geçerli.
-  Future<bool> _waitUntilGone({
-    required String node,
-    required int vmid,
-    required bool isLxc,
-  }) async {
-    const maxAttempts = 20;
-    const pollInterval = Duration(seconds: 3);
-
-    for (int attempt = 0; attempt < maxAttempts; attempt++) {
-      await Future.delayed(pollInterval);
-      final progress = 0.5 + (attempt / maxAttempts) * 0.4;
-      _setOperation(
-        inProgress: true,
-        message:
-            isLxc ? 'Konteyner Siliniyor' : 'Sanal Makine Siliniyor',
-        subMessage:
-            'Silme işlemi devam ediyor... (${attempt + 1}/$maxAttempts)',
-        progress: progress.clamp(0.0, 0.9),
-      );
-      try {
-        final freshData = await _fetchAllData();
-        if (freshData == null) continue;
-        final lxcList = freshData['nodeLXCs']?[node] as List? ?? [];
-        final vmList = freshData['nodeVMs']?[node] as List? ?? [];
-        final list = isLxc ? lxcList : vmList;
-        if (!list.any((item) => item['vmid'] == vmid)) {
-          _applyFreshData(freshData);
-          return true;
-        }
-      } catch (e) {
-        // Bilinçli sessiz: tek bir poll denemesinin başarısız olması normal
-        // (geçici ağ gecikmesi) — döngü tekrar dener.
-        debugPrint('Silme poll hatası (attempt $attempt): $e');
-      }
-    }
-    try {
-      final freshData = await _fetchAllData();
-      if (freshData != null) _applyFreshData(freshData);
-    } catch (_) {
-      // Bilinçli sessiz: silme işleminin son iyi-niyet yenilemesi — vazgeçmeden
-      // önce son bir kez taze veri denenir, o da başarısız olursa raporlanacak
-      // yeni bir bilgi yok.
-    }
-    return false;
   }
 
   Future<void> reorderNodes(int oldIndex, int newIndex) async {

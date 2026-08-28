@@ -144,22 +144,42 @@ class ProxmoxService {
     return res.data['data'] ?? [];
   }
 
-  Future<void> startVM(String node, int vmid, {bool isLxc = false}) async {
+  /// Bu üçü ve deleteLXC/deleteVM, Proxmox'ta arka planda bir GÖREV (task)
+  /// olarak yürütülür — API isteğinin 2xx dönmesi sadece görevin
+  /// KUYRUĞA ALINDIĞINI gösterir, gerçekten başarılı olup olmadığını
+  /// göstermez. Proxmox bu görevi bir UPID (benzersiz görev kimliği) ile
+  /// döndürür; bunu döndürüyoruz ki çağıran taraf getTaskStatus() ile
+  /// görevin GERÇEK sonucunu (exitstatus) otoriter şekilde sorgulayabilsin
+  /// — CT/VM'in durum alanını dolaylı yoklamak yerine.
+  Future<String> startVM(String node, int vmid, {bool isLxc = false}) async {
     final type = isLxc ? 'lxc' : 'qemu';
     final res = await _dio.post('/nodes/$node/$type/$vmid/status/start');
     _ensureSuccess(res);
+    return (res.data['data'] as String?) ?? '';
   }
 
-  Future<void> stopVM(String node, int vmid, {bool isLxc = false}) async {
+  Future<String> stopVM(String node, int vmid, {bool isLxc = false}) async {
     final type = isLxc ? 'lxc' : 'qemu';
     final res = await _dio.post('/nodes/$node/$type/$vmid/status/stop');
     _ensureSuccess(res);
+    return (res.data['data'] as String?) ?? '';
   }
 
-  Future<void> rebootVM(String node, int vmid, {bool isLxc = false}) async {
+  Future<String> rebootVM(String node, int vmid, {bool isLxc = false}) async {
     final type = isLxc ? 'lxc' : 'qemu';
     final res = await _dio.post('/nodes/$node/$type/$vmid/status/reboot');
     _ensureSuccess(res);
+    return (res.data['data'] as String?) ?? '';
+  }
+
+  /// Bir Proxmox görevinin (UPID) şu anki durumunu sorgular. `status` alanı
+  /// görev bitince "stopped" olur; o noktada `exitstatus` "OK" ise gerçek
+  /// başarı, değilse Proxmox'un kendi hata metnidir — bu, bir işlemin
+  /// gerçekten başarılı olup olmadığını öğrenmenin TEK otoriter yolu.
+  Future<Map<String, dynamic>> getTaskStatus(String node, String upid) async {
+    final res = await _dio.get('/nodes/$node/tasks/$upid/status');
+    _ensureSuccess(res);
+    return res.data['data'] ?? {};
   }
 
   Future<Map<String, dynamic>> getClusterStatus() async {
@@ -248,14 +268,16 @@ class ProxmoxService {
     return res.data['data'] ?? {};
   }
 
-  Future<void> deleteLXC(String node, int vmid) async {
+  Future<String> deleteLXC(String node, int vmid) async {
     final res = await _dio.delete('/nodes/$node/lxc/$vmid');
     _ensureSuccess(res);
+    return (res.data['data'] as String?) ?? '';
   }
 
-  Future<void> deleteVM(String node, int vmid) async {
+  Future<String> deleteVM(String node, int vmid) async {
     final res = await _dio.delete('/nodes/$node/qemu/$vmid');
     _ensureSuccess(res);
+    return (res.data['data'] as String?) ?? '';
   }
 
   Future<List<dynamic>> getTemplates(String node) async {
