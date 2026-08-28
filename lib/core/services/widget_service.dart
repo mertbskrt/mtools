@@ -25,7 +25,15 @@ class WidgetService {
       for (final node in provider.nodes) {
         final name = node['node'] as String? ?? '';
         if (name.isEmpty) continue;
-        final status = provider.nodeStatuses[name] ?? {};
+        // '_id' (sunucu+node bileşik kimliği) ile lookup — provider'ın
+        // nodeStatuses/nodeTemps map'leri artık bununla anahtarlanıyor
+        // (bkz. proxmox_provider.dart composeNodeId). Widget JSON'ında
+        // 'name' hâlâ ham ad — native Kotlin tarafı bunu görüntüler,
+        // bu turda değiştirilmiyor (iki sunucu aynı node adını
+        // raporlarsa widget'ta iki node aynı isimle görünür — kabul
+        // edilebilir, kapsam dışı bırakılan bilinen bir sınırlama).
+        final id = node['_id'] as String? ?? name;
+        final status = provider.nodeStatuses[id] ?? {};
         final cpu = ((status['cpu'] ?? 0) as num) * 100;
         final memTotal = (status['memory']?['total'] ?? 1) as int;
         final memUsed = (status['memory']?['used'] ?? 0) as int;
@@ -34,7 +42,7 @@ class WidgetService {
         final diskUsed = (status['rootfs']?['used'] ?? 0) as int;
         final disk = diskTotal > 0 ? diskUsed / diskTotal * 100 : 0.0;
         final uptime = (status['uptime'] ?? 0) as int;
-        final temp = provider.nodeTemps[name];
+        final temp = provider.nodeTemps[id];
         nodes.add({
           'name': name,
           'online': node['status'] == 'online',

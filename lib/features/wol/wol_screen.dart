@@ -147,7 +147,9 @@ class _WolScreenState extends State<WolScreen> {
 
   Future<void> _showAddDialog({WolTarget? target, int? index}) async {
     final provider = context.read<ProxmoxProvider>();
-    final nodes = provider.nodes.map((n) => n['node'] as String).toList();
+    final nodes = provider.nodes
+        .map((n) => (n['_id'] as String, n['node'] as String))
+        .toList();
     final terminalServers = await _loadTerminalServerNames();
     if (!mounted) return;
 
@@ -524,11 +526,19 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
     }
 
     if (!success && (method == 'ssh' || method == 'both')) {
-      final availableNodes =
-          provider.nodes.map((n) => n['node'] as String).toList();
-      if (availableNodes.contains(relayNode)) {
+      // relayNode yeni kayıtlarda bileşik id (host+node), eski kayıtlarda
+      // (yükseltme öncesi) çıplak node adı olabilir — ikisini de kabul
+      // etmek için önce tam id eşleşmesi, olmazsa ham ad eşleşmesi denenir.
+      final availableIds =
+          provider.nodes.map((n) => n['_id'] as String).toList();
+      final matchedId = availableIds.contains(relayNode)
+          ? relayNode
+          : availableIds.firstWhere(
+              (id) => nodeNameFromId(id) == relayNode,
+              orElse: () => '');
+      if (matchedId.isNotEmpty) {
         try {
-          await provider.sendWakeOnLan(relayNode, widget.target.mac);
+          await provider.sendWakeOnLan(matchedId, widget.target.mac);
           success = true;
           _statusMsg = 'Proxmox API ile gönderildi ✓';
         } catch (e) {
@@ -695,7 +705,8 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
                             Icon(Icons.dns_outlined,
                                 color: colors.textMuted, size: 12),
                             const SizedBox(width: 3),
-                            Text('Relay: ${widget.target.relayNode}',
+                            Text(
+                                'Relay: ${nodeNameFromId(widget.target.relayNode)}',
                                 style: TextStyle(
                                     color: colors.textMuted, fontSize: 10)),
                           ],
@@ -811,7 +822,10 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
 
 class _WolTargetSheet extends StatefulWidget {
   final WolTarget? existing;
-  final List<String> nodes;
+  /// Proxmox node'ları — (id: sunucu+node bileşik kimliği, name: ham
+  /// görüntüleme adı). id relay seçimi/kaydı için kullanılır, iki sunucu
+  /// aynı node adını raporlarsa name TEK BAŞINA benzersiz değildir.
+  final List<(String id, String name)> nodes;
   final List<String> terminalServers;
   final Function(WolTarget) onSave;
 
@@ -859,7 +873,8 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
     }
   }
 
-  List<String> get _allRelays => [...widget.nodes, ...widget.terminalServers];
+  List<String> get _allRelays =>
+      [...widget.nodes.map((n) => n.$1), ...widget.terminalServers];
 
   /// Kayıtlı relay artık mevcut Proxmox node / Terminal SSH sunucu
   /// listesinde yoksa (yeniden adlandırıldı/silindi/henüz yüklenmedi) bu,
@@ -1018,13 +1033,14 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
               else ...[
                 if (widget.nodes.isNotEmpty) ...[
                   _relaySectionLabel(context, 'Proxmox Node\'ları'),
-                  ...widget.nodes.map((node) => _relayOption(context, node,
+                  ...widget.nodes.map((node) => _relayOption(
+                      context, node.$1, node.$2,
                       icon: Icons.dns_outlined)),
                 ],
                 if (widget.terminalServers.isNotEmpty) ...[
                   _relaySectionLabel(context, 'Terminal SSH Sunucuları'),
                   ...widget.terminalServers.map((name) => _relayOption(
-                      context, name,
+                      context, name, name,
                       icon: Icons.terminal)),
                 ],
               ],
@@ -1076,10 +1092,14 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
   /// cihazda kimlik bilgisi henüz senkron değil). Kaydı sessizce
   /// kaybetmemek için ayrı, uyarılı bir seçenek olarak gösteriyoruz —
   /// kullanıcı dokunmazsa olduğu gibi korunur.
-  Widget _staleRelayOption(BuildContext context, String name) {
+  Widget _staleRelayOption(BuildContext context, String id) {
     final colors = context.appColors;
+    // id bir Proxmox bileşik kimliği OLABİLİR — kullanıcıya her zaman ham
+    // (görüntülemeye uygun) adı gösteriyoruz, Terminal sunucu adlarında
+    // (ayraç yok) nodeNameFromId zaten değeri olduğu gibi döner.
+    final name = nodeNameFromId(id);
     return Container(
-      key: ValueKey('stale-$name'),
+      key: ValueKey('stale-$id'),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -1112,13 +1132,13 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
     );
   }
 
-  Widget _relayOption(BuildContext context, String name,
+  Widget _relayOption(BuildContext context, String id, String displayName,
       {required IconData icon}) {
     final colors = context.appColors;
-    final selected = _selectedNode == name;
+    final selected = _selectedNode == id;
     return GestureDetector(
-      key: ValueKey(name),
-      onTap: () => setState(() => _selectedNode = name),
+      key: ValueKey(id),
+      onTap: () => setState(() => _selectedNode = id),
       child: AnimatedContainer(
         duration: AppMotion.fast,
         curve: AppMotion.curve,
@@ -1147,7 +1167,7 @@ class _WolTargetSheetState extends State<_WolTargetSheet> {
             const SizedBox(width: 10),
             Icon(icon, color: colors.textMuted, size: 16),
             const SizedBox(width: 8),
-            Text(name,
+            Text(displayName,
                 style: TextStyle(
                     color:
                         selected ? colors.textPrimary : colors.textSecondary,

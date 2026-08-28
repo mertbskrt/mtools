@@ -9,7 +9,13 @@ import 'proxmox_provider.dart';
 
 class ContainerDetailPage extends StatefulWidget {
   final Map<String, dynamic> item;
+  /// Görüntüleme amaçlı ham Proxmox node adı.
   final String nodeName;
+  /// Sunucu+node bileşik kimliği — tüm provider çağrıları (start/stop/
+  /// reboot/delete, config/RRD sorguları, canlı-veri lookup'ı) bunu
+  /// kullanmalı; iki sunucu aynı node adını raporlarsa nodeName TEK
+  /// BAŞINA benzersiz değildir.
+  final String nodeId;
   final bool isLxc;
   final ProxmoxProvider provider;
 
@@ -17,6 +23,7 @@ class ContainerDetailPage extends StatefulWidget {
     super.key,
     required this.item,
     required this.nodeName,
+    required this.nodeId,
     required this.isLxc,
     required this.provider,
   });
@@ -75,7 +82,7 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
   Future<void> _loadConfig() async {
     final vmid = widget.item['vmid'] as int;
     final config = await widget.provider
-        .getContainerConfig(widget.nodeName, vmid, isLxc: widget.isLxc);
+        .getContainerConfig(widget.nodeId, vmid, isLxc: widget.isLxc);
     if (!mounted) return;
     final net0 = config['net0'] ?? '';
     final ipMatch = RegExp(r'ip=([\d.]+)').firstMatch(net0.toString());
@@ -97,7 +104,7 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
     final vmid = widget.item['vmid'] as int;
     try {
       final data = await widget.provider
-          .getContainerRRD(widget.nodeName, vmid, isLxc: widget.isLxc);
+          .getContainerRRD(widget.nodeId, vmid, isLxc: widget.isLxc);
       if (mounted) {
         setState(() {
           _rrdData = data;
@@ -201,7 +208,7 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
     );
     if (!ok) return;
     _doAction(() => widget.provider.deleteContainer(
-        widget.nodeName, widget.item['vmid'] as int,
+        widget.nodeId, widget.item['vmid'] as int,
         isLxc: widget.isLxc));
   }
 
@@ -242,8 +249,8 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
       animation: widget.provider,
       builder: (context, _) {
         final liveList = widget.isLxc
-            ? widget.provider.nodeLXCs[widget.nodeName]
-            : widget.provider.nodeVMs[widget.nodeName];
+            ? widget.provider.nodeLXCs[widget.nodeId]
+            : widget.provider.nodeVMs[widget.nodeId];
         Map<String, dynamic>? liveItem;
         if (liveList != null) {
           for (final i in liveList) {
@@ -496,7 +503,7 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
                     message: '${widget.item['name'] ?? ''} yeniden başlatılacak.',
                     confirmLabel: 'Yeniden Başlat',
                     onConfirm: () => _doAction(() => widget.provider
-                        .rebootContainer(widget.nodeName, vmid,
+                        .rebootContainer(widget.nodeId, vmid,
                             isLxc: widget.isLxc)),
                   ),
                 ),
@@ -513,7 +520,7 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
                     message: '${widget.item['name'] ?? ''} durdurulacak.',
                     confirmLabel: 'Durdur',
                     onConfirm: () => _doAction(() => widget.provider
-                        .stopContainer(widget.nodeName, vmid,
+                        .stopContainer(widget.nodeId, vmid,
                             isLxc: widget.isLxc)),
                   ),
                 ),
@@ -531,7 +538,7 @@ class _ContainerDetailPageState extends State<ContainerDetailPage>
                     message: '${widget.item['name'] ?? ''} başlatılacak.',
                     confirmLabel: 'Başlat',
                     onConfirm: () => _doAction(() => widget.provider
-                        .startContainer(widget.nodeName, vmid,
+                        .startContainer(widget.nodeId, vmid,
                             isLxc: widget.isLxc)),
                   ),
                 ),

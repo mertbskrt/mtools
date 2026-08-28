@@ -206,9 +206,9 @@ class _ProxmoxSummaryHeader extends StatelessWidget {
 
     int totalCT = 0, runningCT = 0, totalVM = 0, runningVM = 0;
     for (final node in provider.nodes) {
-      final name = node['node'] as String;
-      final lxcs = provider.nodeLXCs[name] ?? [];
-      final vms = provider.nodeVMs[name] ?? [];
+      final id = node['_id'] as String;
+      final lxcs = provider.nodeLXCs[id] ?? [];
+      final vms = provider.nodeVMs[id] ?? [];
       totalCT += lxcs.length;
       runningCT += lxcs.where((c) => c['status'] == 'running').length;
       totalVM += vms.length;
@@ -379,11 +379,20 @@ class _ContainerListState extends State<_ContainerList> {
 
     for (final node in provider.nodes) {
       final name = node['node'] as String;
+      final id = node['_id'] as String;
       final list = isLxc
-          ? (provider.nodeLXCs[name] ?? [])
-          : (provider.nodeVMs[name] ?? []);
+          ? (provider.nodeLXCs[id] ?? [])
+          : (provider.nodeVMs[id] ?? []);
       for (final item in list) {
-        items.add({...Map<String, dynamic>.from(item), '_node': name});
+        items.add({
+          ...Map<String, dynamic>.from(item),
+          '_node': name,
+          // Görüntülemede kullanılan '_node' (ham ad) ile ayrı tutuluyor —
+          // provider aksiyon çağrıları (start/stop/reboot/delete) bu
+          // bileşik kimliği kullanmalı, iki sunucu aynı node adını
+          // raporlarsa '_node' TEK BAŞINA benzersiz değildir.
+          '_nodeId': id,
+        });
       }
     }
 
@@ -779,7 +788,7 @@ class _ContainerRow extends StatelessWidget {
   }
 
   void _showActions(BuildContext context, AppThemeData colors, String name,
-      String nodeName, int vmid, bool isRunning) {
+      String nodeId, int vmid, bool isRunning) {
     appShowModalBottomSheet(
       context: context,
       backgroundColor: colors.surface1,
@@ -811,7 +820,7 @@ class _ContainerRow extends StatelessWidget {
                       context,
                       '$name yeniden başlatılacak.',
                       'Yeniden Başlat',
-                      () => provider.rebootContainer(nodeName, vmid,
+                      () => provider.rebootContainer(nodeId, vmid,
                           isLxc: isLxc));
                 },
               ),
@@ -824,7 +833,7 @@ class _ContainerRow extends StatelessWidget {
                       context,
                       '$name durdurulacak.',
                       'Durdur',
-                      () => provider.stopContainer(nodeName, vmid,
+                      () => provider.stopContainer(nodeId, vmid,
                           isLxc: isLxc));
                 },
               ),
@@ -838,7 +847,7 @@ class _ContainerRow extends StatelessWidget {
                       context,
                       '$name başlatılacak.',
                       'Başlat',
-                      () => provider.startContainer(nodeName, vmid,
+                      () => provider.startContainer(nodeId, vmid,
                           isLxc: isLxc));
                 },
               ),
@@ -853,6 +862,7 @@ class _ContainerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final nodeName = item['_node'] as String;
+    final nodeId = item['_nodeId'] as String? ?? nodeName;
     final vmid = item['vmid'] as int;
     final name = item['name'] ?? (isLxc ? 'CT $vmid' : 'VM $vmid');
     final status = item['status'] ?? 'unknown';
@@ -870,13 +880,14 @@ class _ContainerRow extends StatelessWidget {
           ContainerDetailPage(
             item: item,
             nodeName: nodeName,
+            nodeId: nodeId,
             isLxc: isLxc,
             provider: provider,
           ),
         ),
       ),
       onLongPress: () =>
-          _showActions(context, colors, name, nodeName, vmid, isRunning),
+          _showActions(context, colors, name, nodeId, vmid, isRunning),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(

@@ -216,15 +216,17 @@ class _SystemScreenState extends State<SystemScreen> {
         'system_info': true,
       };
 
-  Map<String, bool> _getSections(String nodeName) {
-    return _sectionVisibility[nodeName] ?? _defaultSections();
+  Map<String, bool> _getSections(String nodeId) {
+    final key = matchNodeKey(_sectionVisibility, nodeId) ?? nodeId;
+    return _sectionVisibility[key] ?? _defaultSections();
   }
 
-  void _toggleSection(String nodeName, String section) {
+  void _toggleSection(String nodeId, String section) {
+    final key = matchNodeKey(_sectionVisibility, nodeId) ?? nodeId;
     setState(() {
-      _sectionVisibility[nodeName] ??= _defaultSections();
-      _sectionVisibility[nodeName]![section] =
-          !(_sectionVisibility[nodeName]![section] ?? true);
+      _sectionVisibility[key] ??= _defaultSections();
+      _sectionVisibility[key]![section] =
+          !(_sectionVisibility[key]![section] ?? true);
     });
     _saveSectionVisibility();
   }
@@ -685,10 +687,10 @@ class _SystemScreenState extends State<SystemScreen> {
     ).whenComplete(aliasController.dispose);
   }
 
-  void _showMetricHistory(
-      BuildContext context, String nodeName, String metricType) {
+  void _showMetricHistory(BuildContext context, String nodeId,
+      String displayName, String metricType) {
     final provider = context.read<ProxmoxProvider>();
-    final rrd = provider.nodeRRDData[nodeName] ?? [];
+    final rrd = provider.nodeRRDData[nodeId] ?? [];
     final colors = context.appColors;
 
     appShowModalBottomSheet(
@@ -704,7 +706,7 @@ class _SystemScreenState extends State<SystemScreen> {
         maxChildSize: 0.92,
         builder: (ctx, scrollCtrl) => _MetricHistorySheet(
           scrollCtrl: scrollCtrl,
-          nodeName: nodeName,
+          nodeName: displayName,
           metricType: metricType,
           rrd: rrd,
         ),
@@ -712,11 +714,11 @@ class _SystemScreenState extends State<SystemScreen> {
     );
   }
 
-  void _showStorageContent(
-      BuildContext context, String nodeName, String storageName) {
+  void _showStorageContent(BuildContext context, String nodeId,
+      String displayName, String storageName) {
     final colors = context.appColors;
     final provider = context.read<ProxmoxProvider>();
-    final storages = provider.nodeStorages[nodeName] ?? [];
+    final storages = provider.nodeStorages[nodeId] ?? [];
     final storage = storages.firstWhere(
       (s) => s['storage'] == storageName,
       orElse: () => <String, dynamic>{},
@@ -734,7 +736,7 @@ class _SystemScreenState extends State<SystemScreen> {
         minChildSize: 0.4,
         maxChildSize: 0.92,
         builder: (ctx, scrollCtrl) => _StorageDetailSheet(
-          nodeName: nodeName,
+          nodeName: displayName,
           storage: storage,
           scrollCtrl: scrollCtrl,
         ),
@@ -898,9 +900,9 @@ class _SystemScreenState extends State<SystemScreen> {
     // Özet banner verileri
     int totalCT = 0, runningCT = 0, totalVM = 0, runningVM = 0;
     for (final node in nodes) {
-      final name = node['node'] as String;
-      final lxcs = provider.nodeLXCs[name] ?? [];
-      final vms = provider.nodeVMs[name] ?? [];
+      final id = node['_id'] as String;
+      final lxcs = provider.nodeLXCs[id] ?? [];
+      final vms = provider.nodeVMs[id] ?? [];
       totalCT += lxcs.length;
       runningCT += lxcs.where((c) => c['status'] == 'running').length;
       totalVM += vms.length;
@@ -942,18 +944,25 @@ class _SystemScreenState extends State<SystemScreen> {
                   itemBuilder: (context, i) {
                     final node = nodes[i];
                     final name = node['node'] as String;
+                    // Sunucu+node bileşik kimliği — provider lookup/aksiyon
+                    // çağrıları VE liste key'i için (bkz. proxmox_provider.dart
+                    // composeNodeId): iki farklı sunucu aynı node adını
+                    // raporlayabilir, `name` TEK BAŞINA benzersiz değil.
+                    final id = node['_id'] as String;
 
-                    if (provider.unreachableNodeNames.contains(name)) {
+                    if (provider.unreachableNodeNames.contains(id)) {
                       return _UnreachableNodeCard(
-                        key: ValueKey(name),
+                        key: ValueKey(id),
                         name: name,
-                        host: provider.hostForNode(name) ?? '',
+                        host: provider.hostForNode(id) ?? '',
                       );
                     }
 
-                    final isExpanded = _expandedNodes[name] ?? true;
-                    final status = provider.nodeStatuses[name] ?? {};
-                    final sections = _getSections(name);
+                    final isExpanded = _expandedNodes[
+                            matchNodeKey(_expandedNodes, id) ?? id] ??
+                        true;
+                    final status = provider.nodeStatuses[id] ?? {};
+                    final sections = _getSections(id);
 
                     final cpuUsage = ((status['cpu'] ?? 0) * 100).toDouble();
                     final memTotal = (status['memory']?['total'] ?? 1) as int;
@@ -969,10 +978,10 @@ class _SystemScreenState extends State<SystemScreen> {
                     final loadAvg = status['loadavg'] ?? [];
                     final cpuInfo = status['cpuinfo'] ?? {};
                     final rootfs = status['rootfs'] ?? {};
-                    final disks = provider.nodeDisks[name] ?? [];
-                    final networks = provider.nodeNetworks[name] ?? [];
-                    final storages = provider.nodeStorages[name] ?? [];
-                    final netstat = provider.nodeNetstat[name] ?? [];
+                    final disks = provider.nodeDisks[id] ?? [];
+                    final networks = provider.nodeNetworks[id] ?? [];
+                    final storages = provider.nodeStorages[id] ?? [];
+                    final netstat = provider.nodeNetstat[id] ?? [];
                     final nodeStatus =
                         _translateNodeStatus(node['status'] ?? 'unknown');
                     final isOnline = node['status'] == 'online';
@@ -988,8 +997,9 @@ class _SystemScreenState extends State<SystemScreen> {
                         double.tryParse(cpuInfo['mhz']?.toString() ?? '0') ?? 0;
 
                     return _NodeCard(
-                      key: ValueKey(name),
+                      key: ValueKey(id),
                       name: name,
+                      id: id,
                       isExpanded: isExpanded,
                       isOnline: isOnline,
                       nodeStatus: nodeStatus,
@@ -1024,16 +1034,18 @@ class _SystemScreenState extends State<SystemScreen> {
                       translateHealth: _translateHealth,
                       translateDiskType: _translateDiskType,
                       onToggleExpand: () {
-                        setState(() => _expandedNodes[name] = !isExpanded);
+                        setState(() => _expandedNodes[
+                            matchNodeKey(_expandedNodes, id) ?? id] =
+                            !isExpanded);
                         _saveExpandedState();
                       },
                       onShowDiskDetail: (disk) =>
-                          _showDiskDetail(context, disk, provider, name),
+                          _showDiskDetail(context, disk, provider, id),
                       onShowMetricHistory: (type) =>
-                          _showMetricHistory(context, name, type),
+                          _showMetricHistory(context, id, name, type),
                       onShowStorageContent: (storage) =>
-                          _showStorageContent(context, name, storage),
-                      onCustomize: () => _showSectionCustomizer(context, name),
+                          _showStorageContent(context, id, name, storage),
+                      onCustomize: () => _showSectionCustomizer(context, id),
                     );
                   },
                 ),
@@ -1043,7 +1055,7 @@ class _SystemScreenState extends State<SystemScreen> {
               // olmamış), bu turda erişilemeyen sunucular ──
               Builder(builder: (context) {
                 final knownHosts = nodes
-                    .map((n) => provider.hostForNode(n['node'] as String))
+                    .map((n) => provider.hostForNode(n['_id'] as String))
                     .toSet();
                 final orphanServers = provider.unreachableServers
                     .where((s) => !knownHosts.contains(s.host))
@@ -1141,15 +1153,15 @@ class _SummaryBanner extends StatelessWidget {
     final onlineCount = nodes
         .where((n) =>
             n['status'] == 'online' &&
-            !provider.unreachableNodeNames.contains(n['node']))
+            !provider.unreachableNodeNames.contains(n['_id']))
         .length;
 
     int totalMem = 0, usedMem = 0;
     double cpuSum = 0;
     int cpuCount = 0;
     for (final node in nodes) {
-      final name = node['node'] as String;
-      final status = provider.nodeStatuses[name];
+      final id = node['_id'] as String;
+      final status = provider.nodeStatuses[id];
       totalMem += (status?['memory']?['total'] ?? 0) as int;
       usedMem += (status?['memory']?['used'] ?? 0) as int;
       // Ortalama sadece verisi olan (online) node'lar üzerinden alınıyor —
@@ -1667,7 +1679,12 @@ class _CredentialMissingCard extends StatelessWidget {
 }
 
 class _NodeCard extends StatelessWidget {
+  /// Görüntüleme amaçlı ham Proxmox node adı (kart başlığı, onay diyalogları).
   final String name;
+  /// Sunucu+node bileşik kimliği — provider aksiyon çağrıları (reboot/
+  /// shutdown/CT-VM lookup) ve liste key'i için, name ile ÇAKIŞABİLİR
+  /// (iki sunucu aynı node adını raporlarsa) diye ayrı tutuluyor.
+  final String id;
   final bool isExpanded, isOnline;
   final String nodeStatus;
   final double cpuUsage, memPercent, cpuMhz;
@@ -1694,6 +1711,7 @@ class _NodeCard extends StatelessWidget {
   const _NodeCard({
     super.key,
     required this.name,
+    required this.id,
     required this.isExpanded,
     required this.isOnline,
     required this.nodeStatus,
@@ -1938,7 +1956,7 @@ class _NodeCard extends StatelessWidget {
                                   message:
                                       '$name yeniden başlatılacak. Sunucudaki tüm VM/CT\'ler bu sırada kesintiye uğrar.',
                                   confirmLabel: 'Yeniden Başlat',
-                                  onConfirm: () => provider.rebootNode(name),
+                                  onConfirm: () => provider.rebootNode(id),
                                 );
                               } else if (value == 'shutdown') {
                                 await _confirmPowerAction(
@@ -1948,7 +1966,7 @@ class _NodeCard extends StatelessWidget {
                                   message:
                                       '$name kapatılacak. Fiziksel erişiminiz yoksa tekrar açmak için Wake-on-LAN gerekir.',
                                   confirmLabel: 'Kapat',
-                                  onConfirm: () => provider.shutdownNode(name),
+                                  onConfirm: () => provider.shutdownNode(id),
                                 );
                               } else if (value == 'customize') {
                                 onCustomize();
@@ -2338,8 +2356,8 @@ class _NodeCard extends StatelessWidget {
                           int.tryParse(net['out']?.toString() ?? '0') ?? 0;
 
                       // CT veya VM adını bul
-                      final lxcs = provider.nodeLXCs[name] ?? [];
-                      final vms = provider.nodeVMs[name] ?? [];
+                      final lxcs = provider.nodeLXCs[id] ?? [];
+                      final vms = provider.nodeVMs[id] ?? [];
                       final allContainers = [...lxcs, ...vms];
                       final container = allContainers.firstWhere(
                         (c) => c['vmid']?.toString() == vmid.toString(),

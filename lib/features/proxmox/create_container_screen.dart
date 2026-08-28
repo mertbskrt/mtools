@@ -58,7 +58,7 @@ class _CreateContainerScreenState extends State<CreateContainerScreen> {
   Future<void> _loadData() async {
     final provider = context.read<ProxmoxProvider>();
     if (provider.nodes.isEmpty) return;
-    setState(() => _selectedNode = provider.nodes.first['node']);
+    setState(() => _selectedNode = provider.nodes.first['_id']);
     await _loadNodeData(_selectedNode!);
   }
 

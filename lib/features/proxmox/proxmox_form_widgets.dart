@@ -302,11 +302,15 @@ class ProxmoxNodeSelector extends StatelessWidget {
       runSpacing: 8,
       children: nodes.map((n) {
         final name = n['node'] as String;
-        final isSelected = selected == name;
+        // '_id' (sunucu+node bileşik kimliği) seçim/karşılaştırma için —
+        // iki sunucu aynı node adını raporlarsa 'name' TEK BAŞINA
+        // benzersiz değildir. Görüntülemede hâlâ ham 'name' kullanılıyor.
+        final id = n['_id'] as String? ?? name;
+        final isSelected = selected == id;
         final isOnline = n['status'] == 'online';
 
         return GestureDetector(
-          onTap: () => onSelect(name),
+          onTap: () => onSelect(id),
           child: AnimatedContainer(
             duration: AppMotion.fast,
             curve: AppMotion.curve,

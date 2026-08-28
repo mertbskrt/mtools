@@ -155,8 +155,9 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final provider = context.read<ProxmoxProvider>();
     for (final node in provider.nodes) {
       final name = node['node'] as String;
+      final id = node['_id'] as String? ?? name;
       if (_servers.any((s) => s.name == 'Proxmox: $name')) continue;
-      final networks = provider.nodeNetworks[name] ?? [];
+      final networks = provider.nodeNetworks[id] ?? [];
       String ip = '';
       for (final net in networks) {
         if (net['address'] != null) {

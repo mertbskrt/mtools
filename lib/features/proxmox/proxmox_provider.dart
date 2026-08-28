@@ -22,6 +22,49 @@ class UnreachableProxmoxServer {
   UnreachableProxmoxServer({required this.name, required this.host});
 }
 
+// ── Node kimliği: sunucu+node bileşik anahtarı ─────────────────────────────
+//
+// İki farklı Proxmox sunucusu aynı node adını raporlayabilir (özellikle
+// muhtemel: Proxmox kurulum varsayılanı "pve") — bu durumda çıplak node
+// adı TEK BAŞINA benzersiz bir kimlik değildir. Node kimliği bu yüzden
+// her zaman "host+ayraç+node" bileşik bir string olarak taşınır. Ayraç,
+// bir host/IP adresinde ya da Proxmox node adında ASLA geçemeyen NUL
+// kontrol karakteridir — bu yüzden host/node kısımlarının kendisinde
+// ayraçla çakışma riski yoktur.
+const String _nodeIdSep = '\u0000';
+
+String composeNodeId(String host, String node) => '$host$_nodeIdSep$node';
+
+/// Bir kimlikten ham Proxmox node adını çıkarır — Proxmox API'ye giden
+/// her istek bunu kullanır (URL'de host değil, node adı geçer).
+/// Ayraç YOKSA (yükseltme öncesi eski, çıplak bir kayıt) girdiyi olduğu
+/// gibi döner — eski kayıtlar zaten sadece node adıydı.
+String nodeNameFromId(String id) =>
+    id.contains(_nodeIdSep) ? id.split(_nodeIdSep).last : id;
+
+String hostFromId(String id) =>
+    id.contains(_nodeIdSep) ? id.split(_nodeIdSep).first : '';
+
+/// [storedId] tam olarak bir anahtara uyuyorsa onu döner. Uymuyorsa, HER
+/// İKİ tarafı da (storedId VE map'in her anahtarını) `nodeNameFromId` ile
+/// çıplak ada indirgeyip karşılaştırır — bu SİMETRİK olmak ZORUNDA, çünkü
+/// bu fonksiyon iki farklı yönde çağrılıyor: (a) storedId eski çıplak bir
+/// isim, map yeni bileşik kimliklerle anahtarlanmış (ör. `_serviceFor`) ve
+/// (b) storedId yeni bileşik bir kimlik, map hâlâ eski çıplak isimlerle
+/// anahtarlanmış (ör. `_expandedNodes` — kullanıcı yükseltme sonrası henüz
+/// hiçbir node'u genişletip-kapatmadıysa). TEK eşleşme varsa onu döner,
+/// belirsizse (0 ya da 2+ eşleşme) null döner — çağıran varsayılana düşer.
+/// Böylece yükseltme sonrası (çakışma yoksa) kullanıcı hiçbir kayıtlı
+/// tercihini kaybetmez, tek seferlik bir migration adımına gerek kalmaz.
+K? matchNodeKey<K, V>(Map<K, V> map, String storedId) {
+  if (map.containsKey(storedId)) return storedId as K;
+  final targetName = nodeNameFromId(storedId);
+  final matches = map.keys
+      .where((k) => nodeNameFromId(k as String) == targetName)
+      .toList();
+  return matches.length == 1 ? matches.first : null;
+}
+
 /// `ProxmoxProvider._waitForTask`'ın 3 olası sonucu — bkz. o metodun
 /// dokümantasyonu. `success == null` "belirsiz" (görev bitip bitmediği
 /// öğrenilemedi), `success == false` ise Proxmox'un kendisinin bildirdiği
@@ -85,9 +128,11 @@ class ProxmoxProvider extends ChangeNotifier {
   Map<String, DeliberateOffEntry> _deliberateOffNodes = {};
   Map<String, DeliberateOffEntry> _deliberateOffContainers = {};
 
-  bool isDeliberateOff(String node) =>
-      isDeliberateOffActive(_deliberateOffNodes[node]);
-  DateTime? deliberateOffAt(String node) => _deliberateOffNodes[node]?.at;
+  bool isDeliberateOff(String node) => isDeliberateOffActive(
+      _deliberateOffNodes[matchNodeKey(_deliberateOffNodes, node) ?? node]);
+  DateTime? deliberateOffAt(String node) =>
+      _deliberateOffNodes[matchNodeKey(_deliberateOffNodes, node) ?? node]
+          ?.at;
 
   // ── "Yanlış ağdasın" ayrımı için son başarısız host ────────────────────────
   // Bağlantı hatasının internet'in yokluğundan mı yoksa hedef adresin türünden
@@ -110,9 +155,16 @@ class ProxmoxProvider extends ChangeNotifier {
   /// credential_sync.dart). "Erişilemiyor"dan ayrı: bağlantı hiç denenmedi.
   List<UnreachableProxmoxServer> credentialMissingServers = [];
 
-  /// [name]'e sahip node'un bağlı olduğu servisin ham host'u — "erişilemiyor"
-  /// kartında classifyHost() ile açıklama üretmek için.
-  String? hostForNode(String name) => _nodeServiceMap[name]?.rawHost;
+  /// [id]'ye sahip node'un bağlı olduğu servisin ham host'u — "erişilemiyor"
+  /// kartında classifyHost() ile açıklama üretmek için. [id] bileşik node
+  /// kimliği zaten hostu içerdiği için burada ayrıca bir map lookup'a bile
+  /// gerek yok — ama eski (çıplak isim) kayıtlarla geriye uyumluluk için
+  /// `_nodeServiceMap` üzerinden de zarifçe düşülüyor.
+  String? hostForNode(String id) {
+    final host = hostFromId(id);
+    if (host.isNotEmpty) return host;
+    return _nodeServiceMap[matchNodeKey(_nodeServiceMap, id) ?? id]?.rawHost;
+  }
 
   static const List<int> _retryIntervals = [5, 15, 30, 60, 300];
 
@@ -419,12 +471,18 @@ class ProxmoxProvider extends ChangeNotifier {
         .where((e) => e.value == 'online')
         .map((e) => e.key)
         .toSet();
+    // matchNodeKey ile — `online` bu turun yeni bileşik kimlikleri, ama
+    // `_deliberateOffNodes` yükseltme sonrası hâlâ eski çıplak isimlerle
+    // dolu olabilir (henüz hiç yeniden yazılmadıysa); doğrudan .remove(n)
+    // bu durumda eski kaydı bulamaz, bayrak yanlışlıkla asılı kalırdı.
     final removed = online
-        .where((n) => _deliberateOffNodes.remove(n) != null)
+        .map((n) => matchNodeKey(_deliberateOffNodes, n))
+        .whereType<String>()
+        .where((key) => _deliberateOffNodes.remove(key) != null)
         .toSet();
     if (removed.isEmpty) return;
-    _deliberateOffContainers
-        .removeWhere((k, _) => removed.any((n) => k.startsWith('$n::')));
+    _deliberateOffContainers.removeWhere((k, _) => removed.any((n) =>
+        k.startsWith('$n::') || k.startsWith('${nodeNameFromId(n)}::')));
     await _persistDeliberateOffMaps();
   }
 
@@ -490,8 +548,10 @@ class ProxmoxProvider extends ChangeNotifier {
 
         for (final node in serviceNodes) {
           final name = node['node'] as String;
-          _nodeServiceMap[name] = service;
-          freshNodeStatus[name] = node['status'] as String?;
+          final id = composeNodeId(service.rawHost, name);
+          node['_id'] = id;
+          _nodeServiceMap[id] = service;
+          freshNodeStatus[id] = node['status'] as String?;
         }
 
         // Node'lar birbirinden bağımsız olduğu için paralel sorgulanır.
@@ -499,6 +559,7 @@ class ProxmoxProvider extends ChangeNotifier {
         // süresini node sayısıyla orantılı şekilde uzatıyordu.
         await Future.wait(serviceNodes.map((node) async {
           final name = node['node'] as String;
+          final id = node['_id'] as String;
 
           try {
             final results = await Future.wait([
@@ -511,13 +572,13 @@ class ProxmoxProvider extends ChangeNotifier {
               service.getNodeRRDData(name),
             ]);
 
-            newStatuses[name] = results[0] as Map<String, dynamic>;
-            newDisks[name] = results[1] as List<dynamic>;
-            newStorages[name] = results[2] as List<dynamic>;
-            newLXCs[name] = results[3] as List<dynamic>;
-            newVMs[name] = results[4] as List<dynamic>;
-            newNetworks[name] = results[5] as List<dynamic>;
-            newRRDData[name] = results[6] as List<dynamic>;
+            newStatuses[id] = results[0] as Map<String, dynamic>;
+            newDisks[id] = results[1] as List<dynamic>;
+            newStorages[id] = results[2] as List<dynamic>;
+            newLXCs[id] = results[3] as List<dynamic>;
+            newVMs[id] = results[4] as List<dynamic>;
+            newNetworks[id] = results[5] as List<dynamic>;
+            newRRDData[id] = results[6] as List<dynamic>;
           } catch (e) {
             debugPrint('Node sorgu hatası ($name): $e');
             ErrorLogService().log(
@@ -525,24 +586,24 @@ class ProxmoxProvider extends ChangeNotifier {
               message: 'Node verisi alınamadı: $name',
               detail: e.toString(),
             );
-            newStatuses[name] = nodeStatuses[name] ?? {};
-            newDisks[name] = nodeDisks[name] ?? [];
-            newStorages[name] = nodeStorages[name] ?? [];
-            newLXCs[name] = nodeLXCs[name] ?? [];
-            newVMs[name] = nodeVMs[name] ?? [];
-            newNetworks[name] = nodeNetworks[name] ?? [];
-            newRRDData[name] = nodeRRDData[name] ?? [];
+            newStatuses[id] = nodeStatuses[id] ?? {};
+            newDisks[id] = nodeDisks[id] ?? [];
+            newStorages[id] = nodeStorages[id] ?? [];
+            newLXCs[id] = nodeLXCs[id] ?? [];
+            newVMs[id] = nodeVMs[id] ?? [];
+            newNetworks[id] = nodeNetworks[id] ?? [];
+            newRRDData[id] = nodeRRDData[id] ?? [];
           }
 
-          final rrd = newRRDData[name] ?? [];
+          final rrd = newRRDData[id] ?? [];
           if (rrd.isNotEmpty) {
             final last = rrd.last as Map<String, dynamic>;
-            newStatuses[name]?['netin'] = last['netin'];
-            newStatuses[name]?['netout'] = last['netout'];
-            newStatuses[name]?['iowait'] = last['iowait'];
+            newStatuses[id]?['netin'] = last['netin'];
+            newStatuses[id]?['netout'] = last['netout'];
+            newStatuses[id]?['iowait'] = last['iowait'];
           }
 
-          final disks = newDisks[name] ?? [];
+          final disks = newDisks[id] ?? [];
           if (disks.isNotEmpty) {
             final smartFutures = disks
                 .map((disk) => disk['devpath'] as String? ?? '')
@@ -577,14 +638,14 @@ class ProxmoxProvider extends ChangeNotifier {
       // zaten hiç dokunulmadı), böylece UI eski veriyi taze gibi gösteremez.
       final newUnreachableNodeNames = <String>{};
       if (failedThisCycle.isNotEmpty) {
-        final knownNodeNames = <String>{...nodes.map((n) => n['node'] as String)}
-            .where((name) => !newNodes.any((n) => n['node'] == name));
-        for (final name in knownNodeNames) {
-          final owner = _nodeServiceMap[name];
+        final knownIds = <String>{...nodes.map((n) => n['_id'] as String)}
+            .where((id) => !newNodes.any((n) => n['_id'] == id));
+        for (final id in knownIds) {
+          final owner = _nodeServiceMap[id];
           if (owner != null && failedThisCycle.contains(owner)) {
-            final oldNode = nodes.firstWhere((n) => n['node'] == name);
+            final oldNode = nodes.firstWhere((n) => n['_id'] == id);
             newNodes.add(oldNode);
-            newUnreachableNodeNames.add(name);
+            newUnreachableNodeNames.add(id);
           }
         }
       }
@@ -604,8 +665,8 @@ class ProxmoxProvider extends ChangeNotifier {
 
       if (_nodeOrder.isNotEmpty) {
         newNodes.sort((a, b) {
-          final ai = _nodeOrder.indexOf(a['node'] as String);
-          final bi = _nodeOrder.indexOf(b['node'] as String);
+          final ai = _orderIndex(a);
+          final bi = _orderIndex(b);
           if (ai == -1 && bi == -1) return 0;
           if (ai == -1) return 1;
           if (bi == -1) return -1;
@@ -712,10 +773,11 @@ class ProxmoxProvider extends ChangeNotifier {
   void _fetchNodeTemperatures() {
     for (final node in nodes) {
       final name = node['node'] as String? ?? '';
+      final id = node['_id'] as String? ?? name;
       if (name.isEmpty || node['status'] != 'online') continue;
       NodeSensorService.getTemperature(name).then((temp) {
-        if (temp != null && nodeTemps[name] != temp) {
-          nodeTemps[name] = temp;
+        if (temp != null && nodeTemps[id] != temp) {
+          nodeTemps[id] = temp;
           WidgetService.updateProxmox(this);
         }
       });
@@ -755,6 +817,13 @@ class ProxmoxProvider extends ChangeNotifier {
 
       await Future.wait(serviceNodes.map((node) async {
         final name = node['node'] as String;
+        // _applyFreshData()'in çağırdığı _orderIndex() (ve tüm diğer iç
+        // map'ler) artık _id bekliyor — refresh()'teki gibi burada da
+        // aynı bileşik kimlik üretilip node üzerine yazılıyor ki
+        // startContainer/stopContainer gibi çağıranlar doğru anahtarı
+        // görsün.
+        final id = composeNodeId(service.rawHost, name);
+        node['_id'] = id;
         try {
           final results = await Future.wait([
             service.getNodeStatus(name),
@@ -766,33 +835,33 @@ class ProxmoxProvider extends ChangeNotifier {
             service.getNodeRRDData(name),
             service.getNetstat(name),
           ]);
-          newStatuses[name] = results[0] as Map<String, dynamic>;
-          newDisks[name] = results[1] as List<dynamic>;
-          newStorages[name] = results[2] as List<dynamic>;
-          newLXCs[name] = results[3] as List<dynamic>;
-          newVMs[name] = results[4] as List<dynamic>;
-          newNetworks[name] = results[5] as List<dynamic>;
-          newRRDData[name] = results[6] as List<dynamic>;
-          newNetstat[name] = results[7] as List<dynamic>;
+          newStatuses[id] = results[0] as Map<String, dynamic>;
+          newDisks[id] = results[1] as List<dynamic>;
+          newStorages[id] = results[2] as List<dynamic>;
+          newLXCs[id] = results[3] as List<dynamic>;
+          newVMs[id] = results[4] as List<dynamic>;
+          newNetworks[id] = results[5] as List<dynamic>;
+          newRRDData[id] = results[6] as List<dynamic>;
+          newNetstat[id] = results[7] as List<dynamic>;
 
-          final rrd = newRRDData[name] ?? [];
+          final rrd = newRRDData[id] ?? [];
           if (rrd.isNotEmpty) {
             final last = rrd.last as Map<String, dynamic>;
-            newStatuses[name]?['netin'] = last['netin'];
-            newStatuses[name]?['netout'] = last['netout'];
-            newStatuses[name]?['iowait'] = last['iowait'];
+            newStatuses[id]?['netin'] = last['netin'];
+            newStatuses[id]?['netout'] = last['netout'];
+            newStatuses[id]?['iowait'] = last['iowait'];
           }
         } catch (e) {
           // Bilinçli sessiz: bkz. yukarıdaki getNodes() catch'i — "sessiz
           // yenileme" yardımcısı, asıl loglama periyodik refresh()'te.
           debugPrint('Node sorgu hatası ($name): $e');
-          newStatuses[name] = nodeStatuses[name] ?? {};
-          newDisks[name] = nodeDisks[name] ?? [];
-          newStorages[name] = nodeStorages[name] ?? [];
-          newLXCs[name] = nodeLXCs[name] ?? [];
-          newVMs[name] = nodeVMs[name] ?? [];
-          newNetworks[name] = nodeNetworks[name] ?? [];
-          newRRDData[name] = nodeRRDData[name] ?? [];
+          newStatuses[id] = nodeStatuses[id] ?? {};
+          newDisks[id] = nodeDisks[id] ?? [];
+          newStorages[id] = nodeStorages[id] ?? [];
+          newLXCs[id] = nodeLXCs[id] ?? [];
+          newVMs[id] = nodeVMs[id] ?? [];
+          newNetworks[id] = nodeNetworks[id] ?? [];
+          newRRDData[id] = nodeRRDData[id] ?? [];
         }
       }));
     }
@@ -818,8 +887,8 @@ class ProxmoxProvider extends ChangeNotifier {
 
     if (_nodeOrder.isNotEmpty) {
       newNodes.sort((a, b) {
-        final ai = _nodeOrder.indexOf(a['node'] as String);
-        final bi = _nodeOrder.indexOf(b['node'] as String);
+        final ai = _orderIndex(a);
+        final bi = _orderIndex(b);
         if (ai == -1 && bi == -1) return 0;
         if (ai == -1) return 1;
         if (bi == -1) return -1;
@@ -886,7 +955,8 @@ class ProxmoxProvider extends ChangeNotifier {
       );
 
       try {
-        final status = await _serviceFor(node).getTaskStatus(node, upid);
+        final status =
+            await _serviceFor(node).getTaskStatus(nodeNameFromId(node), upid);
         if (status['status'] == 'stopped') {
           final freshData = await _fetchAllData();
           if (freshData != null) _applyFreshData(freshData);
@@ -932,7 +1002,8 @@ class ProxmoxProvider extends ChangeNotifier {
       progress: 0.15,
     );
     try {
-      final upid = await _serviceFor(node).startVM(node, vmid, isLxc: isLxc);
+      final upid = await _serviceFor(node)
+          .startVM(nodeNameFromId(node), vmid, isLxc: isLxc);
       _setOperation(
         inProgress: true,
         message:
@@ -979,7 +1050,8 @@ class ProxmoxProvider extends ChangeNotifier {
       progress: 0.15,
     );
     try {
-      final upid = await _serviceFor(node).stopVM(node, vmid, isLxc: isLxc);
+      final upid = await _serviceFor(node)
+          .stopVM(nodeNameFromId(node), vmid, isLxc: isLxc);
       await _markContainerDeliberateOff(node, vmid);
       _setOperation(
         inProgress: true,
@@ -1030,7 +1102,8 @@ class ProxmoxProvider extends ChangeNotifier {
       // Proxmox'un status/reboot uç noktası TEK bir görev (stop+start'ı
       // kendi içinde yürütür) — ayrı ayrı "durdu" / "çalışıyor" durumu
       // yoklamaya gerek yok, tek görev sonucu yeterli.
-      final upid = await _serviceFor(node).rebootVM(node, vmid, isLxc: isLxc);
+      final upid = await _serviceFor(node)
+          .rebootVM(nodeNameFromId(node), vmid, isLxc: isLxc);
       _setOperation(
         inProgress: true,
         message: isLxc
@@ -1070,19 +1143,20 @@ class ProxmoxProvider extends ChangeNotifier {
   }
 
   Future<void> rebootNode(String node) async {
+    final name = nodeNameFromId(node);
     _setOperation(
       inProgress: true,
       message: 'Makine Yeniden Başlatılıyor',
-      subMessage: '$node yeniden başlatma komutu gönderildi...',
+      subMessage: '$name yeniden başlatma komutu gönderildi...',
       progress: 0.5,
     );
     try {
-      await _serviceFor(node).rebootNode(node);
+      await _serviceFor(node).rebootNode(name);
       await _markDeliberateOff(node, action: 'reboot');
       _setOperation(
         inProgress: true,
         message: 'Tamamlandı!',
-        subMessage: '$node yeniden başlatılıyor.',
+        subMessage: '$name yeniden başlatılıyor.',
         progress: 1.0,
         success: true,
       );
@@ -1091,7 +1165,7 @@ class ProxmoxProvider extends ChangeNotifier {
       debugPrint('rebootNode hatası: $e');
       ErrorLogService().log(
         type: ErrorLogType.operation,
-        message: 'Node yeniden başlatma başarısız: $node',
+        message: 'Node yeniden başlatma başarısız: $name',
         detail: e.toString(),
       );
       if (e is ProxmoxCommandUncertainException && e.likelyDelivered) {
@@ -1100,7 +1174,7 @@ class ProxmoxProvider extends ChangeNotifier {
           inProgress: true,
           message: 'Komut Gönderildi',
           subMessage:
-              '$node için yeniden başlatma komutu iletildi ama yanıt alınamadı — makine yeniden başlıyor olabilir.',
+              '$name için yeniden başlatma komutu iletildi ama yanıt alınamadı — makine yeniden başlıyor olabilir.',
           progress: 1.0,
           success: true,
         );
@@ -1114,19 +1188,20 @@ class ProxmoxProvider extends ChangeNotifier {
   }
 
   Future<void> shutdownNode(String node) async {
+    final name = nodeNameFromId(node);
     _setOperation(
       inProgress: true,
       message: 'Makine Kapatılıyor',
-      subMessage: '$node kapatma komutu gönderildi...',
+      subMessage: '$name kapatma komutu gönderildi...',
       progress: 0.5,
     );
     try {
-      await _serviceFor(node).shutdownNode(node);
+      await _serviceFor(node).shutdownNode(name);
       await _markDeliberateOff(node, action: 'shutdown');
       _setOperation(
         inProgress: true,
         message: 'Tamamlandı!',
-        subMessage: '$node kapatılıyor.',
+        subMessage: '$name kapatılıyor.',
         progress: 1.0,
         success: true,
       );
@@ -1135,7 +1210,7 @@ class ProxmoxProvider extends ChangeNotifier {
       debugPrint('shutdownNode hatası: $e');
       ErrorLogService().log(
         type: ErrorLogType.operation,
-        message: 'Node kapatma başarısız: $node',
+        message: 'Node kapatma başarısız: $name',
         detail: e.toString(),
       );
       if (e is ProxmoxCommandUncertainException && e.likelyDelivered) {
@@ -1147,7 +1222,7 @@ class ProxmoxProvider extends ChangeNotifier {
           inProgress: true,
           message: 'Komut Gönderildi',
           subMessage:
-              '$node için kapatma komutu iletildi ama yanıt alınamadı — makine kapanıyor olabilir. Birkaç dakika sonra durumu kontrol edin.',
+              '$name için kapatma komutu iletildi ama yanıt alınamadı — makine kapanıyor olabilir. Birkaç dakika sonra durumu kontrol edin.',
           progress: 1.0,
           success: true,
         );
@@ -1162,15 +1237,16 @@ class ProxmoxProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> getContainerConfig(String node, int vmid,
       {bool isLxc = true}) async {
-    final config =
-        await _serviceFor(node).getVMConfig(node, vmid, isLxc: isLxc);
+    final config = await _serviceFor(node)
+        .getVMConfig(nodeNameFromId(node), vmid, isLxc: isLxc);
     return config;
   }
 
   Future<List<dynamic>> getContainerRRD(String node, int vmid,
       {bool isLxc = true}) async {
     if (_services.isEmpty) return [];
-    return await _serviceFor(node).getContainerRRD(node, vmid, isLxc: isLxc);
+    return await _serviceFor(node)
+        .getContainerRRD(nodeNameFromId(node), vmid, isLxc: isLxc);
   }
 
   Future<void> deleteContainer(String node, int vmid,
@@ -1183,8 +1259,8 @@ class ProxmoxProvider extends ChangeNotifier {
     );
     try {
       final upid = isLxc
-          ? await _serviceFor(node).deleteLXC(node, vmid)
-          : await _serviceFor(node).deleteVM(node, vmid);
+          ? await _serviceFor(node).deleteLXC(nodeNameFromId(node), vmid)
+          : await _serviceFor(node).deleteVM(nodeNameFromId(node), vmid);
       _setOperation(
         inProgress: true,
         message: isLxc ? 'Konteyner Siliniyor' : 'Sanal Makine Siliniyor',
@@ -1223,15 +1299,26 @@ class ProxmoxProvider extends ChangeNotifier {
     if (newIndex > oldIndex) newIndex--;
     final node = nodes.removeAt(oldIndex);
     nodes.insert(newIndex, node);
-    _nodeOrder = nodes.map((n) => n['node'] as String).toList();
+    _nodeOrder = nodes.map((n) => n['_id'] as String).toList();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('node_order', jsonEncode(_nodeOrder));
     await CloudSyncService().saveNodeOrder(jsonEncode(_nodeOrder));
     notifyListeners();
   }
 
+  /// `_nodeOrder`'daki bir node için sıralama index'ini bulur — önce tam
+  /// (yeni-format bileşik) kimlikle, bulunamazsa eski (yükseltme öncesi,
+  /// çıplak isimli) kayıtlarla dener. Kullanıcı yükseltme sonrası ilk
+  /// açılışta sıralamasını kaybetmesin diye (çakışma yoksa).
+  int _orderIndex(dynamic node) {
+    final id = node['_id'] as String;
+    final exact = _nodeOrder.indexOf(id);
+    if (exact != -1) return exact;
+    return _nodeOrder.indexOf(node['node'] as String);
+  }
+
   Future<List<dynamic>> getISOList(String node) async {
-    return await _serviceFor(node).getISOList(node);
+    return await _serviceFor(node).getISOList(nodeNameFromId(node));
   }
 
   Future<void> createVM({
@@ -1246,7 +1333,7 @@ class ProxmoxProvider extends ChangeNotifier {
     required String osType,
   }) async {
     await _serviceFor(node).createQemuVM(
-      node: node,
+      node: nodeNameFromId(node),
       vmid: vmid,
       name: name,
       memory: memory,
@@ -1261,7 +1348,7 @@ class ProxmoxProvider extends ChangeNotifier {
   }
 
   Future<List<dynamic>> getTemplateList(String node) async {
-    return await _serviceFor(node).getTemplates(node);
+    return await _serviceFor(node).getTemplates(nodeNameFromId(node));
   }
 
   Future<void> createContainer({
@@ -1281,7 +1368,7 @@ class ProxmoxProvider extends ChangeNotifier {
     required bool unprivileged,
   }) async {
     await _serviceFor(node).createLXC(
-      node: node,
+      node: nodeNameFromId(node),
       vmid: vmid,
       hostname: hostname,
       password: password,
@@ -1302,12 +1389,14 @@ class ProxmoxProvider extends ChangeNotifier {
 
   Future<List<dynamic>> getStorageContent(String node, String storage) async {
     if (_services.isEmpty) return [];
-    return await _serviceFor(node).getStorageContent(node, storage);
+    return await _serviceFor(node)
+        .getStorageContent(nodeNameFromId(node), storage);
   }
 
   Future<void> deleteStorageContent(
       String node, String storage, String volume) async {
-    await _serviceFor(node).deleteStorageContent(node, storage, volume);
+    await _serviceFor(node)
+        .deleteStorageContent(nodeNameFromId(node), storage, volume);
   }
 
   Future<void> restoreBackup({
@@ -1318,7 +1407,7 @@ class ProxmoxProvider extends ChangeNotifier {
     required bool isLxc,
   }) async {
     await _serviceFor(node).restoreBackup(
-      node: node,
+      node: nodeNameFromId(node),
       storage: storage,
       volume: volume,
       vmid: vmid,
@@ -1328,13 +1417,17 @@ class ProxmoxProvider extends ChangeNotifier {
 
   Future<void> sendWakeOnLan(String node, String mac) async {
     if (_services.isEmpty) return;
-    await _serviceFor(node).sendWakeOnLan(node, mac);
+    await _serviceFor(node).sendWakeOnLan(nodeNameFromId(node), mac);
   }
 
   // ── Yardımcılar ───────────────────────────────────────────────────────────
 
+  /// Eski (çıplak isim) kayıtlarla geriye uyumluluk için `matchNodeKey`
+  /// üzerinden zarifçe düşülüyor — yeni-format bileşik kimlikler zaten
+  /// doğrudan eşleşir.
   ProxmoxService _serviceFor(String node) {
-    return _nodeServiceMap[node] ?? _services.first;
+    return _nodeServiceMap[matchNodeKey(_nodeServiceMap, node) ?? node] ??
+        _services.first;
   }
 
   int? _parseDiskTemp(Map<String, dynamic> smartData) {
