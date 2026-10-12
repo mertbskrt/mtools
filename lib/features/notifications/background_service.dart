@@ -127,6 +127,13 @@ Future<void> initBackgroundService() async {
       onForeground: onStart,
     ),
   );
+
+  // Servis zaten çalışıyorsa foreground olduğu garanti değil: ör. 3.3.2'den
+  // güncellemede MY_PACKAGE_REPLACED/boot ile eski yapılandırmayla (o sürüm
+  // uygulama açıkken servisi arka plan moduna alıyordu) düz servis olarak
+  // başlamış olabilir. Şu an uygulama görünür — Android'in yükseltmeye izin
+  // verdiği an bu; servis kendini kontrol edip gerekirse yükseltir.
+  if (alreadyRunning) service.invoke('ensure_foreground');
 }
 
 // ─────────────────────────────────────────────
@@ -214,6 +221,24 @@ void onStart(ServiceInstance service) async {
 
   service.on('app_foreground').listen((event) {
     appInForeground = true;
+  });
+
+  // initBackgroundService() servis zaten çalışırken gönderir (uygulama o an
+  // görünür). Düz servis olarak kalmışsa foreground'a yükseltilir; eski
+  // sürümden kalan bildirim metni de güncellenir.
+  service.on('ensure_foreground').listen((event) async {
+    if (service is! AndroidServiceInstance) return;
+    try {
+      if (!await service.isForegroundService()) {
+        await service.setAsForegroundService();
+      }
+      await service.setForegroundNotificationInfo(
+        title: 'MTools',
+        content: 'Sunucularınız arka planda izleniyor',
+      );
+    } catch (e, st) {
+      await _logBackgroundError('foreground durumuna geçiş', e, st);
+    }
   });
 
   service.on('app_background').listen((event) async {
