@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/design_widgets.dart';
@@ -42,6 +44,9 @@ class NotificationSettingsScreen extends StatelessWidget {
           const SizedBox(height: 8),
           _ServiceCard(provider: provider, colors: colors),
           const SizedBox(height: 8),
+          if (provider.serviceEnabled) ...[
+            _BatteryOptimizationCard(colors: colors),
+          ],
           _TestNotificationButton(provider: provider, colors: colors),
           const SizedBox(height: 16),
 
@@ -332,6 +337,119 @@ class _FilterBadge extends StatelessWidget {
           fontWeight: FontWeight.w600,
           letterSpacing: 0.3,
         ),
+      ),
+    );
+  }
+}
+
+// ── Pil optimizasyonu kartı ───────────────────────────────────────────────────
+
+/// Arka plan izleme açıkken MTools pil optimizasyonundan muaf değilse uyarı
+/// ve muafiyet isteme butonu gösterir; muafsa hiçbir şey çizmez. Muafiyet
+/// yalnızca onboarding'de (isteğe bağlı) soruluyordu — reddedilirse bir
+/// daha hiç sorulmuyordu. Muaf uygulamalar Android 12+'ın "arka plandan
+/// foreground service başlatma" kısıtından da muaf, bu yüzden süreç
+/// öldürülse bile servisin native watchdog'la geri gelebilmesi buna bağlı.
+/// Kullanıcı sistem ekranından dönünce durum yeniden kontrol edilir.
+class _BatteryOptimizationCard extends StatefulWidget {
+  final AppThemeData colors;
+  const _BatteryOptimizationCard({required this.colors});
+
+  @override
+  State<_BatteryOptimizationCard> createState() =>
+      _BatteryOptimizationCardState();
+}
+
+class _BatteryOptimizationCardState extends State<_BatteryOptimizationCard>
+    with WidgetsBindingObserver {
+  // null: henüz kontrol edilmedi (bu arada hiçbir şey çizilmez).
+  bool? _exempt;
+  bool _requesting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    if (!Platform.isAndroid) {
+      if (mounted) setState(() => _exempt = true);
+      return;
+    }
+    final granted = await Permission.ignoreBatteryOptimizations.isGranted;
+    if (mounted) setState(() => _exempt = granted);
+  }
+
+  Future<void> _request() async {
+    if (_requesting) return;
+    setState(() => _requesting = true);
+    await Permission.ignoreBatteryOptimizations.request();
+    await _check();
+    if (mounted) setState(() => _requesting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_exempt != false) return const SizedBox.shrink();
+    final colors = widget.colors;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: colors.warning.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.battery_alert_rounded,
+                  color: colors.warning, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Pil optimizasyonu açık',
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Android, uygulama kapalıyken izleme servisini durdurabilir ve '
+            'bildirimler gelmeyebilir. MTools\'u pil optimizasyonundan muaf '
+            'tutmanız önerilir.',
+            style: TextStyle(color: colors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _requesting ? null : _request,
+              child: const Text('Muafiyet ver'),
+            ),
+          ),
+        ],
       ),
     );
   }

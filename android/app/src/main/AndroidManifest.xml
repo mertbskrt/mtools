@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
@@ -49,11 +49,18 @@
             android:name="androidx.work.impl.background.systemalarm.RescheduleReceiver"
             android:exported="false"/>
 
+        <!-- Sürekli sunucu izleme servisi. dataSync değil specialUse:
+             Android 15+ dataSync'i günde 6 saatle sınırlıyor ve
+             BOOT_COMPLETED'tan başlatılmasına izin vermiyor. -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="specialUse"
             android:exported="true"
-            tools:replace="android:exported"/>
+            tools:replace="android:exported">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Continuous monitoring of the user's own homelab servers (Proxmox, UPS, AdGuard) to deliver outage and threshold alerts while the app is closed."/>
+        </service>
 
         <!-- Ana ekran widget'ları — AdGuard, Proxmox/Sistem, UPS.
              android:label şart — yoksa widget seçicide üçü de sadece

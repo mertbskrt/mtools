@@ -90,7 +90,7 @@ Future<void> initBackgroundService() async {
 
   // initBackgroundService() her main() çalıştığında (her soğuk başlangıçta)
   // koşulsuz çağrılıyordu — servis zaten çalışıyorsa (ör. native watchdog'un
-  // 5 saniyede bir kendiliğinden yeniden başlattığı, ya da süreç çökme
+  // yeniden başlattığı, ya da süreç çökme
   // sonrası kısa bir geçiş anındaki eski bir örnek) autoStart:true yine de
   // startForegroundService()'i TEKRAR tetikliyordu — bu, halihazırda
   // ayakta/geçiş halindeki bir servise karşı çakışan bir ikinci
@@ -111,17 +111,16 @@ Future<void> initBackgroundService() async {
       autoStart: !alreadyRunning,
       isForegroundMode: true,
       notificationChannelId: 'mtools_foreground',
-      // Tek satır, açıklama yok — mümkün olan en silik metin. Android,
-      // foreground service bildirimini asla tamamen gizlemeye izin
-      // vermiyor (OS şartı); FOREGROUND_SERVICE_IMMEDIATE/DEFERRED ayrımı
-      // da sadece birkaç saniyelik kısa görevler için OS'in kendiliğinden
-      // uyguladığı bir optimizasyon — sürekli çalışan bu servis için
-      // geçerli değil ve flutter_background_service üzerinden manuel
-      // kontrolü yok.
-      initialNotificationTitle: 'MTools arka planda',
-      initialNotificationContent: '',
+      // Servis ömrü boyunca foreground'da kaldığı için bu bildirim uygulama
+      // açıkken de durur (kanal Importance.min — çekmecede katlanmış).
+      // Android foreground service bildirimini gizlemeye izin vermiyor.
+      initialNotificationTitle: 'MTools',
+      initialNotificationContent: 'Sunucularınız arka planda izleniyor',
       foregroundServiceNotificationId: 888,
-      foregroundServiceTypes: [AndroidForegroundType.dataSync],
+      // dataSync değil: Android 15+ dataSync'i günde 6 saatle sınırlıyor ve
+      // BOOT_COMPLETED'tan başlatılmasına izin vermiyor; sürekli izleme için
+      // doğru tip specialUse (manifestte subtype açıklamasıyla birlikte).
+      foregroundServiceTypes: [AndroidForegroundType.specialUse],
     ),
     iosConfiguration: IosConfiguration(
       autoStart: true,
@@ -143,34 +142,31 @@ Future<void> initBackgroundService() async {
 // kapalıyken hiç bildirim gelmemesinin gerçek sebebi buydu.
 //
 // Doğru çözüm: servis yalnızca `initBackgroundService()` içinde, uygulama
-// açılışında (kısıtlamasız an) BİR KEZ başlatılır ve süreç yaşadığı sürece
-// hiç durdurulmaz. Ön plan/arka plan geçişlerinde yalnızca zaten çalışan
-// servisin foreground/background MODU değiştirilir (`setAsForegroundService`
-// / `setAsBackgroundService`) — bu, halihazırda çalışan bir servis üzerinde
-// çağrılan bir yöntemdir, yeni servis başlatmaz, dolayısıyla Android'in
-// arka plandan servis başlatma kısıtlamasına hiç takılmaz.
+// açılışında (kısıtlamasız an) BİR KEZ foreground olarak başlatılır ve süreç
+// yaşadığı sürece foreground'da kalır. Mod değiştirme (setAsForegroundService
+// / setAsBackgroundService) de artık yapılmıyor — o da uygulama görünmezken
+// Android 12+ tarafından reddedilebiliyordu (bkz. onStart()). Geçişlerde
+// sadece servisin "uygulama ön planda mı" bayrağı güncellenir.
 
-/// Uygulama arka plana atıldığında çağrılır: servis ön plan moduna geçer
-/// (kalıcı bildirim görünür olur) ve normal aralıklı kontrolüne devam eder.
+/// Uygulama arka plana atıldığında çağrılır: servis Proxmox/UPS/AdGuard
+/// kontrollerine başlar (ön plandayken canlı ekranlar aynı veriyi çektiği
+/// için atlanıyorlar).
 ///
 /// invoke() ile anlık bir olay gönderiliyor (hızlı yol) AMA bu, ana
 /// uygulama ile arka plan servisinin AYRI FlutterEngine'leri arasında bir
-/// mesaj — bu oturumda başka yerlerde (sunucu ayarları, bildirim
-/// tercihleri) defalarca görüldüğü gibi bu tür anlık mesajlaşma bazen
-/// güvenilmez olabiliyor (dinleyici henüz hazır değilken kaybolabiliyor).
-/// Bu yüzden durum AYRICA home_widget'ın (tüm oturum boyunca güvenilir
-/// çalıştığı kanıtlanmış) deposuna da yazılıyor — periyodik döngü bunu
-/// bir güvenlik ağı olarak kontrol edip anlık olay kaybolsa bile en geç
-/// bir sonraki turda kendi kendini düzeltiyor (bkz. onStart()).
+/// mesaj — bu tür anlık mesajlaşma bazen güvenilmez olabiliyor (dinleyici
+/// henüz hazır değilken kaybolabiliyor). Bu yüzden durum AYRICA home_widget
+/// deposuna da yazılıyor — servis bunu birkaç saniyede bir okuyup anlık
+/// olay kaybolsa bile kendini düzeltiyor (bkz. onStart()).
 void notifyAppBackgrounded() {
   FlutterBackgroundService().invoke('app_background');
   HomeWidget.saveWidgetData('app_foreground_state', false);
 }
 
-/// Uygulama ön plana döndüğünde çağrılır: servis arka plan moduna geçer
-/// (kalıcı bildirim gizlenir) ve kontrolleri durdurur — canlı veri artık
-/// yine uygulama içindeki provider'lar tarafından çekiliyor, çift sorgu
-/// yapılmasın diye. Bkz. notifyAppBackgrounded() içindeki güvenilirlik notu.
+/// Uygulama ön plana döndüğünde çağrılır: servis Proxmox/UPS/AdGuard
+/// kontrollerini durdurur — canlı veri yine uygulama içindeki provider'lar
+/// tarafından çekiliyor, çift sorgu yapılmasın diye. Servis foreground'da
+/// kalmaya devam eder. Bkz. notifyAppBackgrounded() içindeki güvenilirlik notu.
 void notifyAppForegrounded() {
   FlutterBackgroundService().invoke('app_foreground');
   HomeWidget.saveWidgetData('app_foreground_state', true);
@@ -184,35 +180,44 @@ void notifyAppForegrounded() {
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
 
-  final plugin = FlutterLocalNotificationsPlugin();
-  await plugin.initialize(const InitializationSettings(
-    android: AndroidInitializationSettings('@drawable/ic_notification'),
-  ));
+  // Aşağıdaki try/catch'lerin dışında kalan yakalanmamış asenkron hatalar da
+  // (ör. bir listener'ın await'i) sadece logcat'e düşmesin, günlüğe yazılsın.
+  PlatformDispatcher.instance.onError = (error, stack) {
+    _logBackgroundError('yakalanmamış hata', error, stack);
+    return true;
+  };
 
-  // Servis her zaman uygulama açılışında başlatıldığı için o an uygulama
-  // zaten ön plandadır — native taraf servisi oluştururken kalıcı bildirimi
-  // otomatik gösterir (kısa bir an görünüp kaybolabilir), burada hemen arka
-  // plan moduna alınarak gizlenir. Gerçek gösterim, uygulama fiilen arka
-  // plana atıldığında ('app_background' olayında) olur.
-  bool appInForeground = true;
-  if (service is AndroidServiceInstance) {
-    await service.setAsBackgroundService();
+  final plugin = FlutterLocalNotificationsPlugin();
+  try {
+    await plugin.initialize(const InitializationSettings(
+      android: AndroidInitializationSettings('@drawable/ic_notification'),
+    ));
+  } catch (e, st) {
+    // Bildirim gönderilemez ama servis yine de çalışmaya devam eder —
+    // bağlantı kontrolü ve widget güncellemeleri bildirimden bağımsız.
+    await _logBackgroundError('bildirim eklentisinin başlatılması', e, st);
   }
+
+  // Servis ömrü boyunca foreground'da kalır — native taraf onu oluştururken
+  // (uygulama açılışında, Android'in izin verdiği tek güvenli an) kalıcı
+  // bildirimi gösterip startForeground() çağırıyor ve bir daha hiç
+  // indirilip yükseltilmiyor. Eskiden burada hemen setAsBackgroundService()
+  // çağrılıp uygulama arka plana geçince setAsForegroundService() ile tekrar
+  // yükseltiliyordu: Android 12+ bu yükseltmeyi uygulama görünmezken
+  // reddedebiliyor (ForegroundServiceStartNotAllowedException), foreground
+  // olmayan servis de birkaç dakikada dondurulup/durduruluyordu — uygulama
+  // kapalıyken bildirim gelmemesinin kök nedeni buydu. Ön/arka plan olayları
+  // artık YALNIZCA appInForeground bayrağını günceller (çift sorgu önlemi).
+  bool appInForeground = true;
 
   service.on('stop').listen((event) => service.stopSelf());
 
-  service.on('app_foreground').listen((event) async {
+  service.on('app_foreground').listen((event) {
     appInForeground = true;
-    if (service is AndroidServiceInstance) {
-      await service.setAsBackgroundService();
-    }
   });
 
   service.on('app_background').listen((event) async {
     appInForeground = false;
-    if (service is AndroidServiceInstance) {
-      await service.setAsForegroundService();
-    }
     // Arka plana geçildiği an bir kez hemen kontrol et — periyodik
     // zamanlayıcının ilk turunu (en fazla intervalSeconds) beklemeye gerek yok.
     if (_connectivityCheckInProgress) return;
@@ -221,13 +226,20 @@ void onStart(ServiceInstance service) async {
       if (await _guardConnectivity(plugin: plugin)) {
         await _runCheck(plugin: plugin);
       }
+    } catch (e, st) {
+      await _logBackgroundError('arka plana geçiş kontrolü', e, st);
     } finally {
       _connectivityCheckInProgress = false;
     }
   });
 
-  final initialSettings = await _loadNotifSettings();
-  final intervalSeconds = initialSettings['interval'] as int;
+  var intervalSeconds = 30;
+  try {
+    final initialSettings = await _loadNotifSettings();
+    intervalSeconds = initialSettings['interval'] as int;
+  } catch (e, st) {
+    await _logBackgroundError('ayarların yüklenmesi', e, st);
+  }
 
   Timer.periodic(Duration(seconds: intervalSeconds), (_) async {
     // _guardConnectivity appInForeground'dan BAĞIMSIZ her turda çalışır —
@@ -249,6 +261,8 @@ void onStart(ServiceInstance service) async {
         await _runCheck(plugin: plugin);
         await _refreshAdGuardWidget(plugin: plugin);
       }
+    } catch (e, st) {
+      await _logBackgroundError('periyodik kontrol', e, st);
     } finally {
       _connectivityCheckInProgress = false;
     }
@@ -256,25 +270,46 @@ void onStart(ServiceInstance service) async {
 
   // Güvenlik ağı: notifyAppForegrounded()/notifyAppBackgrounded()'daki anlık
   // invoke() olayı bir sebeple bu servise ulaşmazsa (ör. dinleyici henüz
-  // kaydolmamışken gönderildiyse), kalıcı "Arka planda izleniyor" bildirimi
-  // uygulama açıkken bile ekranda takılı kalabiliyordu — kullanıcı elle
-  // silmek zorunda kalıyordu. Burada sık aralıklarla (invoke()'tan çok daha
-  // güvenilir olan) home_widget deposundaki gerçek durum okunup mevcut
-  // durumla karşılaştırılıyor; uyuşmazlık varsa en geç birkaç saniye içinde
-  // kendi kendine düzeltiliyor.
+  // kaydolmamışken gönderildiyse) bayrak burada home_widget deposundaki
+  // gerçek durumdan en geç birkaç saniye içinde düzeltiliyor. Değer hiç
+  // yazılmamışsa (ör. servis cihaz açılışında, uygulama hiç açılmadan
+  // başladıysa) "arka planda" kabul edilir — aksi halde kontroller hiç
+  // çalışmazdı; uygulama açıksa onResume zaten hemen true yazıyor.
   Timer.periodic(const Duration(seconds: 3), (_) async {
-    final shouldBeForeground =
-        await HomeWidget.getWidgetData<bool>('app_foreground_state') ?? true;
-    if (shouldBeForeground == appInForeground) return;
-    appInForeground = shouldBeForeground;
-    if (service is AndroidServiceInstance) {
-      if (appInForeground) {
-        await service.setAsBackgroundService();
-      } else {
-        await service.setAsForegroundService();
-      }
+    try {
+      appInForeground =
+          await HomeWidget.getWidgetData<bool>('app_foreground_state') ??
+              false;
+    } catch (e, st) {
+      await _logBackgroundError('ön plan durumu okuma', e, st);
     }
   });
+}
+
+// Aynı hatanın her turda (~30 sn) tekrar yazılıp 200 kayıtlık günlüğü
+// doldurmaması için: aynı yer + hata tipi en fazla 10 dakikada bir yazılır.
+final Map<String, DateTime> _lastBackgroundErrorLog = {};
+
+/// Arka plan isolate'ındaki bir hatayı ErrorLogService'e yazar. Bu izolatta
+/// ErrorLogService'in bellek listesi boş başladığı için önce diskten
+/// yüklenir (bkz. notification_dispatch.dart'taki aynı not).
+Future<void> _logBackgroundError(
+    String where, Object error, StackTrace stack) async {
+  debugPrint('[MTools BG] $where hatası: $error');
+  final key = '$where|${error.runtimeType}';
+  final last = _lastBackgroundErrorLog[key];
+  if (last != null && DateTime.now().difference(last).inMinutes < 10) return;
+  _lastBackgroundErrorLog[key] = DateTime.now();
+  try {
+    await ErrorLogService().load();
+    await ErrorLogService().log(
+      type: ErrorLogType.unknown,
+      message: 'Arka plan servisi: $where başarısız',
+      detail: '$error\n\n$stack',
+    );
+  } catch (_) {
+    // Bilinçli sessiz: günlüğe yazılamıyorsa yapılacak başka bir şey yok.
+  }
 }
 
 // ─────────────────────────────────────────────
