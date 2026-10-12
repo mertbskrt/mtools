@@ -58,3 +58,6 @@ app.*.map.json
 
 # Machine-local SDK paths — never portable, never committed.
 android/local.properties
+
+# Claude Code yerel notları (iç ağ/sunucu ayrıntıları)
+CLAUDE.local.md
