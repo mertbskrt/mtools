@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,7 @@ import 'package:mtools/features/proxmox/proxmox_service.dart';
 /// fırlatır, diğerleri sabit veri döner.
 class _FakeProxmoxService extends ProxmoxService {
   final Set<String> failing;
+  int getNodesCalls = 0;
   _FakeProxmoxService(this.failing) {
     configure('192.0.2.10', '8006', 'root@pam!MToolsV2', 'secret');
   }
@@ -21,9 +23,12 @@ class _FakeProxmoxService extends ProxmoxService {
   }
 
   @override
-  Future<List<dynamic>> getNodes() async => [
-        {'node': 'pve', 'status': 'online'},
-      ];
+  Future<List<dynamic>> getNodes() async {
+    getNodesCalls++;
+    return [
+      {'node': 'pve', 'status': 'online'},
+    ];
+  }
   @override
   Future<Map<String, dynamic>> getNodeStatus(String node) =>
       _answer('status', <String, dynamic>{
@@ -110,5 +115,38 @@ void main() {
 
     expect(p.nodeNetstat[id], hasLength(1));
     expect(p.nodeFetchFailures[id], isEmpty);
+  });
+
+  testWidgets(
+      'uygulama arka plandayken periyodik yenileme durur, ön plana dönünce '
+      'hemen yenilenip devam eder', (tester) async {
+    final svc = _FakeProxmoxService({});
+    final provider = ProxmoxProvider()..debugAddService(svc);
+
+    await provider.debugStartPolling();
+    final afterStart = svc.getNodesCalls;
+
+    await tester.pump(const Duration(seconds: 31));
+    expect(svc.getNodesCalls, afterStart + 1, reason: 'ön planda yokluyor');
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    final paused = svc.getNodesCalls;
+    await tester.pump(const Duration(seconds: 95));
+    expect(svc.getNodesCalls, paused, reason: 'arka planda yoklamamalı');
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(svc.getNodesCalls, paused + 1, reason: 'dönüşte hemen yenilemeli');
+
+    await tester.pump(const Duration(seconds: 31));
+    expect(svc.getNodesCalls, paused + 2, reason: 'döngü yeniden başlamalı');
+
+    // Sahte zamanlayıcı doğrulaması tearDown'dan önce çalıştığı için
+    // periyodik timer burada kapatılmalı.
+    provider.dispose();
   });
 }

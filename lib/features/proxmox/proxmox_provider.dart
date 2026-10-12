@@ -137,6 +137,12 @@ class ProxmoxProvider extends ChangeNotifier {
 
   bool _refreshing = false;
   Timer? _periodicTimer;
+  // Periyodik yenileme isteniyor mu (init/debugStartPolling sonrası true,
+  // reset() sonrası false) ve uygulama şu an arka planda mı — bkz.
+  // _startPeriodicRefresh().
+  bool _pollingWanted = false;
+  bool _inBackground = false;
+  AppLifecycleListener? _lifecycleListener;
   int _consecutiveFailCount = 0;
 
   // ── Retry state ───────────────────────────────────────────────────────────
@@ -232,6 +238,7 @@ class ProxmoxProvider extends ChangeNotifier {
   }
 
   void reset() {
+    _pollingWanted = false;
     _periodicTimer?.cancel();
     _retryTimer?.cancel();
     _services.clear();
@@ -402,9 +409,46 @@ class ProxmoxProvider extends ChangeNotifier {
 
     await prefs.setBool('app_active', true);
 
+    _startPeriodicRefresh();
+  }
+
+  void _startPeriodicRefresh() {
+    _pollingWanted = true;
+    // Ekran görünmezken canlı veri yoklamak gereksiz: arka plan servisi
+    // (background_service.dart) bildirim için gereken kontrolleri zaten
+    // kendisi yapıyor. Servis kalıcı foreground olduğundan süreç artık
+    // dondurulmuyor — bu timer arka planda da çalışmaya devam ederdi.
+    _lifecycleListener ??= AppLifecycleListener(
+      onPause: _pausePolling,
+      onResume: _resumePolling,
+    );
     _periodicTimer?.cancel();
-    _periodicTimer =
-        Timer.periodic(const Duration(seconds: 30), (_) => refresh());
+    _periodicTimer = _inBackground
+        ? null
+        : Timer.periodic(const Duration(seconds: 30), (_) => refresh());
+  }
+
+  void _pausePolling() {
+    _inBackground = true;
+    _periodicTimer?.cancel();
+    _periodicTimer = null;
+  }
+
+  void _resumePolling() {
+    _inBackground = false;
+    // reset() sonrası (oturum kapatma vb.) döngü bilinçli durdurulmuşsa
+    // ön plana dönüş onu yeniden başlatmamalı.
+    if (!_pollingWanted) return;
+    refresh();
+    _startPeriodicRefresh();
+  }
+
+  /// Testlerde init()'in SharedPreferences/cloud adımları olmadan yenileme
+  /// döngüsünü başlatmak için.
+  @visibleForTesting
+  Future<void> debugStartPolling() async {
+    await refresh();
+    _startPeriodicRefresh();
   }
 
   // ── Retry mekanizması ─────────────────────────────────────────────────────
@@ -1560,6 +1604,7 @@ class ProxmoxProvider extends ChangeNotifier {
   void dispose() {
     _periodicTimer?.cancel();
     _retryTimer?.cancel();
+    _lifecycleListener?.dispose();
     super.dispose();
   }
 }
