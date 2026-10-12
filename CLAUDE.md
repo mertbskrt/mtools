@@ -262,6 +262,15 @@ Release build komutu (3.4.0'dan itibaren):
 `flutter build apk --release --dart-define=MTOOLS_APP_KEY=$MTOOLS_APP_KEY`
 Anahtar verilmeden derlenen APK'da geri bildirim formu yerine mailto seçeneği görünür.
 
+**Test derlemesi** (yayına alınmaz, panele yüklenmez): aynı komuta `--dart-define=MTOOLS_TEST_ERRORS=true`
+eklenir. Bu, Ayarlar'da "Test hatası oluştur" kartını açar (`features/dashboard/test_error_screen.dart`).
+Release imzalı olduğu için telefondaki sürümün üzerine `adb install -r` ile kurulur, veriler kalır.
+**Yayın APK'sı bu bayrak olmadan ayrıca derlenir.** Bayrak derleme zamanı sabiti olduğundan normal
+derlemede ilgili kod tamamen atılır (3.4.0'da `libapp.so` içinde `TestErrorScreen` arandı:
+bayraksız derlemede yok, test derlemesinde var).
+Release imza sertifikası SHA-256: `747a497d5e5dd0d11c6b76f1757d3ecb1667ae700ed8e30c232222e86d296068`
+(yayınlanmış 3.3.2 ile aynı; `apksigner verify --print-certs` ile kontrol edilir).
+
 ## Git geçmişi (son 40 commit özeti)
 
 - **v3.2.0** (`2e4bc48`): ilk açık kaynak sürüm. Ardından README/SECURITY İngilizceye çevrildi.
