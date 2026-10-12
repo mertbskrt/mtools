@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'bottom_nav_item.dart';
 import '../../widgets/mtools_loader.dart';
 import 'package:provider/provider.dart';
 import 'package:showcaseview/showcaseview.dart';
@@ -466,24 +467,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: SizedBox(
                   height: 64,
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    // Her sekme Expanded: dokunma alanı alt menünün tam
+                    // yüksekliği ve sekmenin kendi genişliği (bkz.
+                    // BottomNavItem).
                     children: tabs.asMap().entries.map((entry) {
                       final tab = entry.value;
                       final showcaseKey = _showcaseKeyFor(tab.id);
-                      final navItem = _NavItem(
+                      // Aynı sekme / tanıtım turu kontrolü ve titreşim
+                      // BottomNavItem içinde; buraya yalnızca gerçek bir
+                      // sekme değişimi ulaşır.
+                      final navItem = BottomNavItem(
                         key: ValueKey(tab.id),
                         icon: _getIcon(tab.id),
                         label: tab.label,
                         index: entry.key,
                         currentIndex: _currentIndex,
                         tourActive: _tourActive,
-                        onTap: (idx) {
-                          if (!_tourActive) setState(() => _currentIndex = idx);
-                        },
+                        onTap: (idx) => setState(() => _currentIndex = idx),
                       );
 
                       if (showcaseKey != null) {
-                        return Showcase(
+                        return Expanded(child: Showcase(
                           key: showcaseKey,
                           description: _tourDescription(tab.id),
                           tooltipBackgroundColor: colors.surface1,
@@ -499,9 +503,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           onToolTipClick: () =>
                               ShowCaseWidget.of(context).next(),
                           child: navItem,
-                        );
+                        ));
                       }
-                      return navItem;
+                      return Expanded(child: navItem);
                     }).toList(),
                   ),
                 ),
@@ -566,64 +570,6 @@ class _OfflineBanner extends StatelessWidget {
 }
 
 // ── Nav Item ──────────────────────────────────────────────────────────────────
-
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int index;
-  final int currentIndex;
-  final bool tourActive;
-  final void Function(int) onTap;
-
-  const _NavItem({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.index,
-    required this.currentIndex,
-    required this.tourActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final bool isSelected = index == currentIndex;
-
-    return GestureDetector(
-      onTap: () => onTap(index),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: AppMotion.base,
-              curve: AppMotion.curve,
-              transform: Matrix4.translationValues(0, isSelected ? -2 : 0, 0),
-              child: Icon(
-                icon,
-                color: isSelected ? colors.primary : colors.textMuted,
-                size: isSelected ? 24 : 20,
-              ),
-            ),
-            const SizedBox(height: 2),
-            AnimatedDefaultTextStyle(
-              duration: AppMotion.base,
-              curve: AppMotion.curve,
-              style: TextStyle(
-                color: isSelected ? colors.primary : colors.textMuted,
-                fontSize: isSelected ? 9.5 : 8.5,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-              child: Text(label),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── AppBar Refresh Button ─────────────────────────────────────────────────────
 
