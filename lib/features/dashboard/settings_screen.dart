@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:provider/provider.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'dart:async';
@@ -458,14 +459,7 @@ class _GuestContentState extends State<_GuestContent> {
         ),
         const SizedBox(width: 12),
         _loading
-            ? SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colors.primary,
-                ),
-              )
+            ? const MToolsLoader(size: 18)
             : GestureDetector(
                 onTap: _signIn,
                 child: Container(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../widgets/mtools_loader.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../core/utils/app_transitions.dart';
@@ -953,7 +954,12 @@ class _TerminalViewState extends State<_TerminalView> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const CircularProgressIndicator(color: Colors.green),
+                  // Terminal her temada siyah arka planlı — loader işaret
+                  // rengini temadan aldığı için koyu temaya sabitleniyor.
+                  Theme(
+                    data: ThemeData(brightness: Brightness.dark),
+                    child: const MToolsLoader(),
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Bağlanılıyor...\n${widget.server.host}:${widget.server.port}',

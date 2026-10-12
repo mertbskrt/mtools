@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
@@ -339,12 +340,7 @@ class _CheckButtonState extends State<_CheckButton> {
           ),
           alignment: Alignment.center,
           child: widget.checking
-              ? SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: colors.primary),
-                )
+              ? const MToolsLoader(size: 18)
               : Text(
                   'Güncellemeleri Kontrol Et',
                   style: TextStyle(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../widgets/mtools_loader.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -644,12 +645,7 @@ class _WolCardState extends State<_WolCard> with SingleTickerProviderStateMixin 
                         : null,
                   ),
                   child: _sending
-                      ? SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: statusColor),
-                        )
+                      ? const MToolsLoader(size: 18)
                       : Icon(
                           _sent == true
                               ? Icons.check_rounded

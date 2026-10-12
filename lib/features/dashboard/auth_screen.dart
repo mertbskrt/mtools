@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:local_auth/local_auth.dart';
@@ -593,14 +594,7 @@ class _LandingContentState extends State<_LandingContent>
 
                       // Google butonu
                       widget.loading
-                          ? Center(
-                              child: SizedBox(
-                                width: 26,
-                                height: 26,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.5, color: colors.primary),
-                              ),
-                            )
+                          ? const Center(child: MToolsLoader(size: 18))
                           : GestureDetector(
                               onTap: widget.onSignIn,
                               child: Container(

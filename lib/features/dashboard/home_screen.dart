@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:provider/provider.dart';
 import 'package:showcaseview/showcaseview.dart';
 import '../../core/theme/app_theme.dart';
@@ -201,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (allTabs.isEmpty) {
       return Scaffold(
         backgroundColor: colors.surface0,
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: MToolsLoader()),
       );
     }
 
@@ -213,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       return Scaffold(
         backgroundColor: colors.surface0,
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: MToolsLoader()),
       );
     }
 

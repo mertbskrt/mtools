@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import '../../core/utils/app_transitions.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,15 +16,11 @@ import 'adguard_provider.dart';
 Widget _switchSlot(AppThemeData colors,
     {required bool loading, required Widget child}) {
   if (!loading) return child;
-  return SizedBox(
+  return const SizedBox(
     width: 34,
     height: 20,
     child: Center(
-      child: SizedBox(
-        width: 16,
-        height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
-      ),
+      child: MToolsLoader(size: 18),
     ),
   );
 }
@@ -450,7 +447,7 @@ class _AdGuardFormScreenState extends State<_AdGuardFormScreen> {
           ),
           const SizedBox(height: 20),
           if (_loading)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: MToolsLoader())
           else ...[
             if (_success == false)
               Container(
@@ -1107,7 +1104,7 @@ class _QueryLogTabState extends State<_QueryLogTab> {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(16),
-                          child: CircularProgressIndicator(),
+                          child: MToolsLoader(size: 18),
                         ),
                       );
                     }

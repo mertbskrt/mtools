@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../widgets/mtools_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -610,12 +611,7 @@ class _TestNotificationButtonState extends State<_TestNotificationButton> {
       child: OutlinedButton.icon(
         onPressed: _sending ? null : _send,
         icon: _sending
-            ? SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: colors.textSecondary),
-              )
+            ? const MToolsLoader(size: 18)
             : Icon(Icons.notifications_active_outlined,
                 size: 16, color: colors.textSecondary),
         label: Text(

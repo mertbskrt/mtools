@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/connectivity_provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -58,40 +59,14 @@ class _ProxmoxScreenState extends State<ProxmoxScreen>
     final isReady = context.select<ProxmoxProvider, bool>((p) => p.isReady);
 
     if (!isReady) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 36,
-              height: 36,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.5, color: colors.primary),
-            ),
-            const SizedBox(height: 14),
-            Text('Yükleniyor...',
-                style: TextStyle(color: colors.textMuted, fontSize: 13)),
-          ],
-        ),
+      return const Center(
+        child: MToolsLoader(label: 'Yükleniyor'),
       );
     }
 
     if (isLoading && !hasNodes) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 40,
-              height: 40,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.5, color: colors.primary),
-            ),
-            const SizedBox(height: 16),
-            Text('Sunucu verileri yükleniyor...',
-                style: TextStyle(color: colors.textMuted, fontSize: 13)),
-          ],
-        ),
+      return const Center(
+        child: MToolsLoader(label: 'Yükleniyor'),
       );
     }
 
@@ -101,21 +76,8 @@ class _ProxmoxScreenState extends State<ProxmoxScreen>
 
     // Henüz ilk yükleme tamamlanmadıysa bekle
     if (isInitialLoad && !hasNodes) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 40,
-              height: 40,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.5, color: colors.primary),
-            ),
-            const SizedBox(height: 16),
-            Text('Sunucu verileri yükleniyor...',
-                style: TextStyle(color: colors.textMuted, fontSize: 13)),
-          ],
-        ),
+      return const Center(
+        child: MToolsLoader(label: 'Yükleniyor'),
       );
     }
 

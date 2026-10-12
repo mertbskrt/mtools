@@ -6,6 +6,7 @@ import 'package:mtools/core/theme/app_theme.dart';
 import 'package:mtools/features/dashboard/system_screen.dart';
 import 'package:mtools/features/proxmox/proxmox_provider.dart';
 import 'package:mtools/shared/models/alias_provider.dart';
+import 'package:mtools/widgets/mtools_loader.dart';
 
 /// Gerçek sunucuya hiç bağlanmayan, sadece Sistem ekranının okuduğu alanları
 /// dolduran sahte provider. `isConfigured` normalde `_services`'ten türüyor;
@@ -89,6 +90,16 @@ void main() {
     expect(
         find.text('Bazı veriler alınamadı: kaynak kullanımı, konteynerler'),
         findsOneWidget);
+  });
+
+  testWidgets('ilk yüklemede MToolsLoader "Yükleniyor" etiketiyle görünür',
+      (tester) async {
+    final provider = _FakeProxmoxProvider()..isReady = false;
+    await _pumpSystemScreen(tester, provider);
+
+    expect(find.byType(MToolsLoader), findsOneWidget);
+    expect(find.text('Yükleniyor'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
   testWidgets('hata yoksa "alınamadı" metni hiç görünmez', (tester) async {

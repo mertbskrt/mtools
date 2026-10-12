@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import '../theme/app_theme.dart';
 import '../theme/design_widgets.dart';
 
@@ -59,13 +60,7 @@ class OperationOverlay extends StatelessWidget {
                         style: colors.body.copyWith(
                             color: accent, fontWeight: FontWeight.w600),
                       )
-                    : SizedBox(
-                        key: const ValueKey('loading'),
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: colors.primary),
-                      ),
+                    : const MToolsLoader(key: ValueKey('loading')),
               ),
               const SizedBox(height: AppSpace.md),
               Text(message, style: colors.body, textAlign: TextAlign.center),

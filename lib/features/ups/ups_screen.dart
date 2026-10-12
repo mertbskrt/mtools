@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import '../../core/utils/app_transitions.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -300,7 +301,7 @@ class _UpsScreenState extends State<UpsScreen> {
                         color: colors.surface1,
                         borderRadius: BorderRadius.circular(AppRadius.md),
                       ),
-                      child: const Center(child: CircularProgressIndicator()),
+                      child: const Center(child: MToolsLoader()),
                     );
                   }
 
@@ -906,11 +907,7 @@ class _AddServerSheetState extends State<_AddServerSheet> {
               child: OutlinedButton.icon(
                 onPressed: _testing ? null : _test,
                 icon: _testing
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const MToolsLoader(size: 18)
                     : Icon(
                         _testResult == null
                             ? Icons.wifi_find

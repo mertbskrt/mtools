@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../widgets/mtools_loader.dart';
 import 'package:flutter/material.dart';
 import '../../core/utils/app_transitions.dart';
 import 'package:provider/provider.dart';
@@ -582,14 +583,7 @@ class _ServerCardState extends State<_ServerCard> {
                     borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                   child: _testing
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: statusColor,
-                          ),
-                        )
+                      ? const MToolsLoader(size: 18)
                       : Icon(
                           needsCredentials
                               ? Icons.key_off_rounded
@@ -1444,16 +1438,7 @@ class _ConnectingWidget extends StatelessWidget {
                     width: 2,
                   ),
                 ),
-                child: Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: colors.primary,
-                    ),
-                  ),
-                ),
+                child: const Center(child: MToolsLoader()),
               ),
             ],
           );

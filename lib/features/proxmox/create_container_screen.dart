@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import 'proxmox_provider.dart';
@@ -414,11 +415,7 @@ class _CreateContainerScreenState extends State<CreateContainerScreen> {
                       borderRadius: BorderRadius.circular(14)),
                 ),
                 child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
+                    ? const MToolsLoader(size: 18)
                     : const Text('Konteyner Oluştur',
                         style: TextStyle(
                             color: Colors.white,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import '../../core/utils/app_transitions.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -764,21 +765,8 @@ class _SystemScreenState extends State<SystemScreen> {
     final isReady = context.select<ProxmoxProvider, bool>((p) => p.isReady);
 
     if (!isReady) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 36,
-              height: 36,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.5, color: colors.primary),
-            ),
-            const SizedBox(height: 14),
-            Text('Yükleniyor...',
-                style: TextStyle(color: colors.textMuted, fontSize: 13)),
-          ],
-        ),
+      return const Center(
+        child: MToolsLoader(label: 'Yükleniyor'),
       );
     }
 
@@ -815,21 +803,8 @@ class _SystemScreenState extends State<SystemScreen> {
     }
 
     if (isInitialLoad) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 36,
-              height: 36,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.5, color: colors.primary),
-            ),
-            const SizedBox(height: 14),
-            Text('Yükleniyor...',
-                style: TextStyle(color: colors.textMuted, fontSize: 13)),
-          ],
-        ),
+      return const Center(
+        child: MToolsLoader(label: 'Yükleniyor'),
       );
     }
 
@@ -4110,14 +4085,10 @@ class _BackupsSectionState extends State<_BackupsSection> {
             future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
+                return const Center(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: colors.primary)),
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: MToolsLoader(),
                   ),
                 );
               }
@@ -4170,11 +4141,7 @@ class _BackupsSectionState extends State<_BackupsSection> {
                             ),
                           ),
                           if (_busy)
-                            SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: colors.primary))
+                            const MToolsLoader(size: 18)
                           else ...[
                             IconButton(
                               icon: Icon(Icons.settings_backup_restore_rounded,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/design_widgets.dart';
@@ -773,8 +774,7 @@ class _PerformanceTab extends StatelessWidget {
       );
     } else if (rrdLoading) {
       stateKey = 'loading';
-      child =
-          Center(child: CircularProgressIndicator(color: colors.primary));
+      child = const Center(child: MToolsLoader());
     } else if (cpuPoints.length < 2) {
       stateKey = 'no_data';
       child = Center(

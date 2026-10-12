@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/mtools_loader.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_theme.dart';
 import 'release_history_service.dart';
@@ -86,8 +87,8 @@ class _ReleaseHistoryScreenState extends State<ReleaseHistoryScreen> {
 
   Widget _buildBody(AppThemeData colors) {
     if (_loading) {
-      return Center(
-        child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary),
+      return const Center(
+        child: MToolsLoader(label: 'Yükleniyor'),
       );
     }
 
