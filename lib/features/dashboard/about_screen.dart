@@ -570,6 +570,7 @@ class _AboutScreenState extends State<AboutScreen> {
   ];
 
   static const _releaseNotes = [
+    'Alt menüde dokunma titreşimi ve daha hızlı geçiş',
     'Bildirim motorunda 4 güvenilirlik hatası düzeltildi: UPS-çevrimdışı '
         'bildiriminin bekleme süresi ayarı yok sayılıyordu, node-çevrimdışı '
         'bildirimleri tutarsız bekleme süresi kullanıyordu, node-tekrar-'

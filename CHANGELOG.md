@@ -2,6 +2,12 @@
 
 All notable changes to MTools are documented in this file.
 
+## [3.4.0] — Unreleased
+
+### New
+
+- Added haptic feedback and faster response on bottom navigation
+
 ## [3.3.2] — 2026-08-28
 
 ### Fixed
