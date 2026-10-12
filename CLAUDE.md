@@ -91,7 +91,7 @@ Paket: `flutter_background_service` 5.x (Android impl. 6.3.1), `flutter_local_no
    Eklentinin varsayılanı `autoStartOnBoot = true`.
 2. **Giriş noktası ve foreground durumu.** Servis, uygulama açılışında foreground olarak başlar ve
    **ömrü boyunca foreground'da kalır**; `setAsForegroundService`/`setAsBackgroundService`
-   hiç çağrılmaz (`9792b98`). `onStart` sırası: `DartPluginRegistrant.ensureInitialized()` →
+   hiç çağrılmaz (`ea6475e`). `onStart` sırası: `DartPluginRegistrant.ensureInitialized()` →
    `PlatformDispatcher.onError` → plugin initialize (try/catch). Hatalar
    `_logBackgroundError` ile ErrorLogService'e yazılır (aynı yer ve hata tipi için en fazla
    10 dakikada bir).
@@ -103,7 +103,7 @@ Paket: `flutter_background_service` 5.x (Android impl. 6.3.1), `flutter_local_no
    (servis boot'ta, uygulama açılmadan başlamışsa).
    Proxmox, NUT ve AdGuard provider'larının 30 sn'lik canlı yoklaması uygulama paused olunca
    durur, resume'da hemen yenileyip devam eder (`core/utils/foreground_polling.dart`,
-   `ForegroundPolling` mixin; `37eedab`, `d095e44`). Bildirim için gereken tüm kontroller
+   `ForegroundPolling` mixin; `f692657`, `9c667d8`). Bildirim için gereken tüm kontroller
    arka plan servisinde provider'lardan bağımsız yapılır: terminal dışındaki 21 tetikleyicinin hepsi.
 4. **Döngü.** `Timer.periodic(interval)` (`:232`). Interval yalnızca `onStart`'ta bir kez okunur.
    Her tur `_guardConnectivity` çalışır (DNS: one.one.one.one). Uygulama ön plandaysa
@@ -130,7 +130,7 @@ Paket: `flutter_background_service` 5.x (Android impl. 6.3.1), `flutter_local_no
    kurulur, API 33+ cihazlarda inexact'tır. Servis `START_NOT_STICKY` döner, `onTimeout` yoktur.
    Bu yüzden servis koddaki eski yorumda yazdığı gibi "5 saniyede bir" yeniden başlatılmaz.
 
-**Çözülen teşhis (2026-10-12, `9792b98`):** "Uygulama kapalıyken bildirim gelmiyor" sorununun
+**Çözülen teşhis (2026-10-12, `ea6475e`):** "Uygulama kapalıyken bildirim gelmiyor" sorununun
 kök nedeni, servisin yalnızca arka plana geçiş anında foreground'a yükseltilmesiydi. Android 12+
 bunu reddedebiliyordu; Android 15+'ta da dataSync süre limiti doluyordu. Çözüm: servis kalıcı
 foreground, tip specialUse. Ayarlar'a pil optimizasyonu muafiyeti kartı eklendi; muafiyet
@@ -138,8 +138,8 @@ watchdog'un arka plandan yeniden başlatabilmesi için de gerekli. **Gerçek cih
 
 ## Bekleyen işler (sıradaki sürüm, muhtemelen 3.4.0+24)
 
-Sıra: A (Sistem ekranı çökmesi, `f598699`, onaylandı) → B (bildirim çözümü, `9792b98` + `37eedab` +
-`1672eb7` + `d095e44`, onaylandı) → loader entegrasyonu (`3d86f40`; yükleme
+Sıra: A (Sistem ekranı çökmesi, `a235b22`, onaylandı) → B (bildirim çözümü, `ea6475e` + `f692657` +
+`aedf6c4` + `9c667d8`, onaylandı) → loader entegrasyonu (`75f1f51`; yükleme
 göstergeleri artık `lib/widgets/mtools_loader.dart` → `MToolsLoader`; yeni yüklemelerde
 `CircularProgressIndicator` değil bu kullanılır) → **D (iletişim ve geri bildirim, yapıldı,
 onay ve cihaz testi bekliyor)**. D'nin kodu: `lib/features/feedback/` (`FeedbackService`,
