@@ -977,9 +977,17 @@ class _SystemScreenState extends State<SystemScreen> {
                     final swapTotal = (status['swap']?['total'] ?? 0) as int;
                     final swapUsed = (status['swap']?['used'] ?? 0) as int;
                     final uptime = status['uptime'] ?? 0;
-                    final loadAvg = status['loadavg'] ?? [];
-                    final cpuInfo = status['cpuinfo'] ?? {};
-                    final rootfs = status['rootfs'] ?? {};
+                    // Status boş/eksik geldiğinde (uç nokta hatası, token izni)
+                    // `?? {}` dynamic bağlamda Map<dynamic, dynamic> üretip
+                    // _NodeCard'ın Map<String, dynamic> alanında TypeError
+                    // fırlatıyordu — tipler burada açıkça sabitleniyor.
+                    final loadAvg = (status['loadavg'] as List?) ?? const [];
+                    final cpuInfo =
+                        (status['cpuinfo'] as Map?)?.cast<String, dynamic>() ??
+                            const <String, dynamic>{};
+                    final rootfs =
+                        (status['rootfs'] as Map?)?.cast<String, dynamic>() ??
+                            const <String, dynamic>{};
                     final disks = provider.nodeDisks[id] ?? [];
                     final networks = provider.nodeNetworks[id] ?? [];
                     final storages = provider.nodeStorages[id] ?? [];
@@ -1178,6 +1186,24 @@ class _SummaryBanner extends StatelessWidget {
     final memPercent = totalMem > 0 ? usedMem / totalMem * 100 : 0.0;
     final cpuPercent = cpuCount > 0 ? cpuSum / cpuCount : 0.0;
 
+    // Uç noktası hata verip elde hiç verisi olmayan metrikler — banner'daki
+    // 0/0 ve %0 değerlerinin "gerçekten sıfır" sanılmaması için altına
+    // açıkça yazılıyor.
+    bool anyMissing(String endpoint, bool Function(String id) isEmpty) =>
+        nodes.any((n) {
+          final id = n['_id'] as String;
+          return provider.endpointFailed(id, endpoint) && isEmpty(id);
+        });
+    final missing = [
+      if (anyMissing(
+          'status', (id) => provider.nodeStatuses[id]?['cpu'] == null))
+        'kaynak kullanımı',
+      if (anyMissing('lxc', (id) => (provider.nodeLXCs[id] ?? []).isEmpty))
+        'konteynerler',
+      if (anyMissing('qemu', (id) => (provider.nodeVMs[id] ?? []).isEmpty))
+        'sanal makineler',
+    ];
+
     final allOnline = onlineCount == nodes.length;
     final memColor = colors.thresholdColor(memPercent);
     final cpuColor = colors.thresholdColor(cpuPercent);
@@ -1280,6 +1306,11 @@ class _SummaryBanner extends StatelessWidget {
               ),
             ),
           ),
+          if (missing.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.md),
+            _DataUnavailable('Bazı veriler alınamadı: ${missing.join(', ')}',
+                inline: true),
+          ],
         ],
       ),
     );
@@ -1815,6 +1846,18 @@ class _NodeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
 
+    // Uç nokta bu turda hata verdi VE elde veri yok → sıfır/boş değer yerine
+    // "alınamadı" gösterilir. status için 'cpu' bakılıyor: hata durumunda
+    // map yine de RRD'den gelen netin/netout ile dolu olabiliyor.
+    final statusUnavailable =
+        provider.endpointFailed(id, 'status') && status['cpu'] == null;
+    bool listUnavailable(String endpoint, List<dynamic> data) =>
+        data.isEmpty && provider.endpointFailed(id, endpoint);
+    final disksUnavailable = listUnavailable('disks', disks);
+    final storagesUnavailable = listUnavailable('storage', storages);
+    final networksUnavailable = listUnavailable('network', networks);
+    final netstatUnavailable = listUnavailable('netstat', netstat);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2010,7 +2053,10 @@ class _NodeCard extends StatelessWidget {
                       border: Border(top: BorderSide(color: colors.hairline)),
                     ),
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-                    child: Column(
+                    child: statusUnavailable
+                        ? const _DataUnavailable('Kaynak verisi alınamadı',
+                            inline: true)
+                        : Column(
                       children: [
                         MetricRow(
                           label: 'CPU',
@@ -2072,6 +2118,9 @@ class _NodeCard extends StatelessWidget {
                   icon: Icons.monitor_heart_outlined,
                   colors: context.appColors,
                 ),
+                if (statusUnavailable)
+                  const _DataUnavailable('Kaynak verisi alınamadı')
+                else
                 _CardContainer(
                   child: Column(
                     children: [
@@ -2149,6 +2198,9 @@ class _NodeCard extends StatelessWidget {
                   icon: Icons.info_outline_rounded,
                   colors: context.appColors,
                 ),
+                if (statusUnavailable)
+                  const _DataUnavailable('Sistem bilgisi alınamadı')
+                else
                 _CardContainer(
                   child: Column(
                     children: [
@@ -2199,12 +2251,15 @@ class _NodeCard extends StatelessWidget {
               ],
 
               // ── Diskler ──
-              if ((sections['disks'] ?? true) && disks.isNotEmpty) ...[
+              if ((sections['disks'] ?? true) &&
+                  (disks.isNotEmpty || disksUnavailable)) ...[
                 _SectionHeader(
                   title: 'Diskler',
                   icon: Icons.storage_rounded,
                   colors: context.appColors,
                 ),
+                if (disksUnavailable)
+                  const _DataUnavailable('Disk listesi alınamadı'),
                 ...disks.map((disk) {
                   final devpath = disk['devpath'] ?? '';
                   final smart = provider.nodeDiskSmarts[devpath] ?? {};
@@ -2316,12 +2371,15 @@ class _NodeCard extends StatelessWidget {
               // ham listede depolama olup hepsi pasifse başlık, altında hiç
               // satır olmadan boş görünürdü.
               if ((sections['storage'] ?? true) &&
-                  storages.any((s) => s['active'] == 1)) ...[
+                  (storages.any((s) => s['active'] == 1) ||
+                      storagesUnavailable)) ...[
                 _SectionHeader(
                   title: 'Depolama',
                   icon: Icons.folder_rounded,
                   colors: context.appColors,
                 ),
+                if (storagesUnavailable)
+                  const _DataUnavailable('Depolama listesi alınamadı'),
                 ...storages.where((s) => s['active'] == 1).map((s) {
                   final used = (s['used'] ?? 0) as int;
                   final total = (s['total'] ?? 1) as int;
@@ -2340,12 +2398,16 @@ class _NodeCard extends StatelessWidget {
               ],
 
               // ── CT/VM Ağ Trafiği ──
-              if ((sections['netstat'] ?? true) && netstat.isNotEmpty) ...[
+              if ((sections['netstat'] ?? true) &&
+                  (netstat.isNotEmpty || netstatUnavailable)) ...[
                 _SectionHeader(
                   title: 'CT/VM Ağ Trafiği',
                   icon: Icons.swap_horiz_rounded,
                   colors: context.appColors,
                 ),
+                if (netstatUnavailable)
+                  const _DataUnavailable('Ağ trafiği verisi alınamadı')
+                else
                 _CardContainer(
                   child: Column(
                     children: netstat.asMap().entries.map((entry) {
@@ -2466,14 +2528,19 @@ class _NodeCard extends StatelessWidget {
               // arayüz olup hepsi OVSBridge/adressiz (DHCP) ise başlık,
               // altında hiç satır olmadan boş görünürdü.
               if ((sections['network'] ?? true) &&
-                  networks.any((n) =>
-                      n['type'] != 'OVSBridge' &&
-                      (n['address'] != null || n['address6'] != null))) ...[
+                  (networksUnavailable ||
+                      networks.any((n) =>
+                          n['type'] != 'OVSBridge' &&
+                          (n['address'] != null ||
+                              n['address6'] != null)))) ...[
                 _SectionHeader(
                   title: 'Ağ Arayüzleri',
                   icon: Icons.lan_rounded,
                   colors: context.appColors,
                 ),
+                if (networksUnavailable)
+                  const _DataUnavailable('Ağ arayüzleri alınamadı')
+                else
                 _CardContainer(
                   child: Column(
                     children: networks
@@ -2594,6 +2661,32 @@ class _CardContainer extends StatelessWidget {
       ),
       child: child,
     );
+  }
+}
+
+/// Bir uç nokta bu turda hata verdiği ve elde hiç veri olmadığı için
+/// bölümün boş/sıfır değer göstermek yerine durumu açıkça söylemesi.
+/// [inline] true ise kart çerçevesi olmadan tek satır (daraltılmış görünüm).
+class _DataUnavailable extends StatelessWidget {
+  final String text;
+  final bool inline;
+
+  const _DataUnavailable(this.text, {this.inline = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final row = Row(
+      children: [
+        Icon(Icons.cloud_off_rounded, color: colors.warning, size: 16),
+        const SizedBox(width: AppSpace.sm),
+        Expanded(
+          child: Text(text,
+              style: TextStyle(color: colors.textSecondary, fontSize: 13)),
+        ),
+      ],
+    );
+    return inline ? row : _CardContainer(child: row);
   }
 }
 

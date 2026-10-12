@@ -17,9 +17,19 @@ import 'features/adguard/adguard_provider.dart';
 import 'features/ups/nut_provider.dart';
 import 'core/services/connectivity_provider.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'core/services/crash_reporter.dart';
+import 'core/widgets/error_fallback.dart';
+import 'features/dashboard/error_log_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Günlük açılışta bir kez diskten yüklenir — aksi halde bu oturumdaki ilk
+  // ErrorLogService().log() çağrısı boş bellek listesini kaydedip önceki
+  // oturumların kayıtlarını eziyordu.
+  await ErrorLogService().load();
+  // Yakalanmamış framework/asenkron hatalar ErrorLogService'e, hata
+  // ekranında gösterilen kısa kodla birlikte yazılır (bkz. crash_reporter.dart).
+  installCrashReporting();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -54,57 +64,13 @@ void main() async {
   // düz gri/boş bir kutu ("beyaz ekran"). Debug'da orijinal detaylı hata
   // ekranı korunuyor (geliştirmeyi kolaylaştırmak için); release'te
   // kullanıcı hiçbir zaman boş bir ekranla karşılaşmasın diye MTools
-  // markalı, anlaşılır bir mesaj gösteriliyor.
+  // markalı, anlaşılır bir mesaj gösteriliyor — ekran adı ve kısa hata kodu
+  // ile (aynı kod Hata Günlüğü'ndeki kayıtta da var).
   if (kReleaseMode) {
-    ErrorWidget.builder = (details) => const _GlobalErrorFallback();
+    ErrorWidget.builder = GlobalErrorFallback.fromDetails;
   }
 
   runApp(const MToolsApp());
-}
-
-class _GlobalErrorFallback extends StatelessWidget {
-  const _GlobalErrorFallback();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFF0D0D0D),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.error_outline_rounded,
-              color: Colors.white.withValues(alpha: 0.5), size: 40),
-          const SizedBox(height: 16),
-          const Text(
-            'Bir şeyler ters gitti',
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Bu ekran yüklenemedi. Geri dönüp tekrar deneyin.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'MTools',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.35),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class MToolsApp extends StatelessWidget {

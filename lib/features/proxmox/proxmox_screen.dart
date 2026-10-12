@@ -438,6 +438,10 @@ class _ContainerListState extends State<_ContainerList> {
     }
 
     final unreachableServers = provider.unreachableServers;
+    // Liste uç noktası (lxc/qemu) hata verdiyse "bulunamadı" yerine
+    // "alınamadı" — gerçekten hiç CT/VM olmamasıyla karışmasın.
+    final listFailed = provider.nodes.any((n) =>
+        provider.endpointFailed(n['_id'] as String, isLxc ? 'lxc' : 'qemu'));
 
     if (items.isEmpty) {
       return Scaffold(
@@ -471,9 +475,13 @@ class _ContainerListState extends State<_ContainerList> {
                     Text(
                       _filterStatus != 'all'
                           ? 'Bu filtreye uyan sonuç yok'
-                          : isLxc
-                              ? 'Konteyner bulunamadı'
-                              : 'Sanal makine bulunamadı',
+                          : listFailed
+                              ? (isLxc
+                                  ? 'Konteyner listesi alınamadı'
+                                  : 'Sanal makine listesi alınamadı')
+                              : isLxc
+                                  ? 'Konteyner bulunamadı'
+                                  : 'Sanal makine bulunamadı',
                       style:
                           TextStyle(color: colors.textSecondary, fontSize: 15),
                     ),
@@ -481,7 +489,9 @@ class _ContainerListState extends State<_ContainerList> {
                     Text(
                       _filterStatus != 'all'
                           ? 'Filtreyi değiştirmeyi deneyin'
-                          : 'Sunucu bağlı değil veya liste boş',
+                          : listFailed
+                              ? 'Sunucu bu listeyi döndürmedi — ayrıntı Hata Günlüğü\'nde'
+                              : 'Sunucu bağlı değil veya liste boş',
                       style: TextStyle(color: colors.textMuted, fontSize: 12),
                     ),
                   ],

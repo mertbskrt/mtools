@@ -78,6 +78,14 @@ class _TaskOutcome {
   factory _TaskOutcome.unknown() => _TaskOutcome._(null, null);
 }
 
+/// Tek bir node için uç nokta uç nokta sorgu sonucu. Hata veren uç noktanın
+/// alanı null kalır ve adı [failed]'e eklenir — diğerleri etkilenmez.
+class _NodeEndpoints {
+  Map<String, dynamic>? status;
+  List<dynamic>? disks, storages, lxcs, vms, networks, rrd, netstat;
+  final Set<String> failed = {};
+}
+
 class ProxmoxProvider extends ChangeNotifier {
   final List<ProxmoxService> _services = [];
   final Map<String, ProxmoxService> _nodeServiceMap = {};
@@ -96,6 +104,16 @@ class ProxmoxProvider extends ChangeNotifier {
   Map<String, Map<String, dynamic>> nodeDiskSmarts = {};
   Map<String, List<dynamic>> nodeNetstat = {};
 
+  /// Node kimliği → bu turda hata veren uç noktaların adları ('status',
+  /// 'disks', 'storage', 'lxc', 'qemu', 'network', 'rrddata', 'netstat').
+  /// UI, ilgili veri boşken "veri alınamadı" ile "gerçekten boş" ayrımını
+  /// buradan yapar.
+  Map<String, Set<String>> nodeFetchFailures = {};
+
+  /// [endpoint] bu turda [id] node'u için hata verdiyse true.
+  bool endpointFailed(String id, String endpoint) =>
+      nodeFetchFailures[id]?.contains(endpoint) ?? false;
+
   bool isLoading = false;
   String? error;
   bool isInitialLoad = true;
@@ -107,6 +125,10 @@ class ProxmoxProvider extends ChangeNotifier {
   /// ile "sunucu ekli ama erişilemiyor" durumlarını ayırt edebilmesi için
   /// gerekiyor (bkz. WidgetService.updateProxmox).
   bool get isConfigured => _services.isNotEmpty;
+
+  /// Testlerde gerçek sunucu yerine sahte bir [ProxmoxService] eklemek için.
+  @visibleForTesting
+  void debugAddService(ProxmoxService service) => _services.add(service);
 
   // NotificationProvider sadece UI'da history göstermek için tutuluyor
   // Bildirim üretimi artık background_service.dart'ta
@@ -526,6 +548,7 @@ class ProxmoxProvider extends ChangeNotifier {
       final newRRDData = <String, List<dynamic>>{};
       final newNetstat = <String, List<dynamic>>{};
       final newDiskSmarts = <String, Map<String, dynamic>>{};
+      final newFailures = <String, Set<String>>{};
       final failedThisCycle = <ProxmoxService>{};
       final freshNodeStatus = <String, String?>{};
 
@@ -561,39 +584,19 @@ class ProxmoxProvider extends ChangeNotifier {
           final name = node['node'] as String;
           final id = node['_id'] as String;
 
-          try {
-            final results = await Future.wait([
-              service.getNodeStatus(name),
-              service.getNodeDisks(name),
-              service.getNodeStorage(name),
-              service.getLXCs(name),
-              service.getVMs(name),
-              service.getNodeNetwork(name),
-              service.getNodeRRDData(name),
-            ]);
-
-            newStatuses[id] = results[0] as Map<String, dynamic>;
-            newDisks[id] = results[1] as List<dynamic>;
-            newStorages[id] = results[2] as List<dynamic>;
-            newLXCs[id] = results[3] as List<dynamic>;
-            newVMs[id] = results[4] as List<dynamic>;
-            newNetworks[id] = results[5] as List<dynamic>;
-            newRRDData[id] = results[6] as List<dynamic>;
-          } catch (e) {
-            debugPrint('Node sorgu hatası ($name): $e');
-            ErrorLogService().log(
-              type: ErrorLogType.refresh,
-              message: 'Node verisi alınamadı: $name',
-              detail: e.toString(),
-            );
-            newStatuses[id] = nodeStatuses[id] ?? {};
-            newDisks[id] = nodeDisks[id] ?? [];
-            newStorages[id] = nodeStorages[id] ?? [];
-            newLXCs[id] = nodeLXCs[id] ?? [];
-            newVMs[id] = nodeVMs[id] ?? [];
-            newNetworks[id] = nodeNetworks[id] ?? [];
-            newRRDData[id] = nodeRRDData[id] ?? [];
-          }
+          // Uç noktalar birbirinden bağımsız — biri (ör. token izni eksik
+          // olan disks) hata verirse sadece o veri eksik kalır.
+          final r = await _fetchNodeEndpoints(service, name, logFailures: true);
+          _mergeNodeEndpoints(id, r,
+              statuses: newStatuses,
+              disks: newDisks,
+              storages: newStorages,
+              lxcs: newLXCs,
+              vms: newVMs,
+              networks: newNetworks,
+              rrd: newRRDData,
+              netstat: newNetstat,
+              failures: newFailures);
 
           final rrd = newRRDData[id] ?? [];
           if (rrd.isNotEmpty) {
@@ -685,6 +688,7 @@ class ProxmoxProvider extends ChangeNotifier {
         nodeRRDData = newRRDData;
         nodeDiskSmarts = newDiskSmarts;
         nodeNetstat = newNetstat;
+        nodeFetchFailures = newFailures;
       }
 
       _consecutiveFailCount = 0;
@@ -799,6 +803,7 @@ class ProxmoxProvider extends ChangeNotifier {
     final newRRDData = <String, List<dynamic>>{};
     final newDiskSmarts = <String, Map<String, dynamic>>{};
     final newNetstat = <String, List<dynamic>>{};
+    final newFailures = <String, Set<String>>{};
 
     for (final service in _services) {
       List<dynamic> serviceNodes;
@@ -824,44 +829,27 @@ class ProxmoxProvider extends ChangeNotifier {
         // görsün.
         final id = composeNodeId(service.rawHost, name);
         node['_id'] = id;
-        try {
-          final results = await Future.wait([
-            service.getNodeStatus(name),
-            service.getNodeDisks(name),
-            service.getNodeStorage(name),
-            service.getLXCs(name),
-            service.getVMs(name),
-            service.getNodeNetwork(name),
-            service.getNodeRRDData(name),
-            service.getNetstat(name),
-          ]);
-          newStatuses[id] = results[0] as Map<String, dynamic>;
-          newDisks[id] = results[1] as List<dynamic>;
-          newStorages[id] = results[2] as List<dynamic>;
-          newLXCs[id] = results[3] as List<dynamic>;
-          newVMs[id] = results[4] as List<dynamic>;
-          newNetworks[id] = results[5] as List<dynamic>;
-          newRRDData[id] = results[6] as List<dynamic>;
-          newNetstat[id] = results[7] as List<dynamic>;
+        // Günlüğe yazılmıyor: bkz. yukarıdaki getNodes() catch'i — "sessiz
+        // yenileme" yardımcısı, asıl loglama periyodik refresh()'te.
+        final r =
+            await _fetchNodeEndpoints(service, name, logFailures: false);
+        _mergeNodeEndpoints(id, r,
+            statuses: newStatuses,
+            disks: newDisks,
+            storages: newStorages,
+            lxcs: newLXCs,
+            vms: newVMs,
+            networks: newNetworks,
+            rrd: newRRDData,
+            netstat: newNetstat,
+            failures: newFailures);
 
-          final rrd = newRRDData[id] ?? [];
-          if (rrd.isNotEmpty) {
-            final last = rrd.last as Map<String, dynamic>;
-            newStatuses[id]?['netin'] = last['netin'];
-            newStatuses[id]?['netout'] = last['netout'];
-            newStatuses[id]?['iowait'] = last['iowait'];
-          }
-        } catch (e) {
-          // Bilinçli sessiz: bkz. yukarıdaki getNodes() catch'i — "sessiz
-          // yenileme" yardımcısı, asıl loglama periyodik refresh()'te.
-          debugPrint('Node sorgu hatası ($name): $e');
-          newStatuses[id] = nodeStatuses[id] ?? {};
-          newDisks[id] = nodeDisks[id] ?? [];
-          newStorages[id] = nodeStorages[id] ?? [];
-          newLXCs[id] = nodeLXCs[id] ?? [];
-          newVMs[id] = nodeVMs[id] ?? [];
-          newNetworks[id] = nodeNetworks[id] ?? [];
-          newRRDData[id] = nodeRRDData[id] ?? [];
+        final rrd = newRRDData[id] ?? [];
+        if (rrd.isNotEmpty) {
+          final last = rrd.last as Map<String, dynamic>;
+          newStatuses[id]?['netin'] = last['netin'];
+          newStatuses[id]?['netout'] = last['netout'];
+          newStatuses[id]?['iowait'] = last['iowait'];
         }
       }));
     }
@@ -879,7 +867,84 @@ class ProxmoxProvider extends ChangeNotifier {
       'nodeRRDData': newRRDData,
       'nodeDiskSmarts': newDiskSmarts,
       'nodeNetstat': newNetstat,
+      'nodeFetchFailures': newFailures,
     };
+  }
+
+  /// Bir node'un uç noktalarını paralel ama BİRBİRİNDEN BAĞIMSIZ sorgular —
+  /// tek bir Future.wait içinde toplanırsa birinin hatası (ör. token'da
+  /// Sys.Audit eksik → disks 403) status/CT/VM dahil hepsini siliyordu.
+  /// [logFailures] true ise her hata veren uç nokta ErrorLogService'e
+  /// "Node verisi alınamadı: <node> / <uç nokta>" olarak yazılır.
+  Future<_NodeEndpoints> _fetchNodeEndpoints(
+    ProxmoxService service,
+    String name, {
+    required bool logFailures,
+  }) async {
+    final r = _NodeEndpoints();
+
+    Future<T?> guard<T>(String endpoint, Future<T> Function() call) async {
+      try {
+        return await call();
+      } catch (e) {
+        r.failed.add(endpoint);
+        debugPrint('Node sorgu hatası ($name / $endpoint): $e');
+        if (logFailures) {
+          ErrorLogService().log(
+            type: ErrorLogType.refresh,
+            message: 'Node verisi alınamadı: $name / $endpoint',
+            detail: e.toString(),
+          );
+        }
+        return null;
+      }
+    }
+
+    await Future.wait([
+      guard('status', () => service.getNodeStatus(name))
+          .then((v) => r.status = v),
+      guard('disks', () => service.getNodeDisks(name))
+          .then((v) => r.disks = v),
+      guard('storage', () => service.getNodeStorage(name))
+          .then((v) => r.storages = v),
+      guard('lxc', () => service.getLXCs(name)).then((v) => r.lxcs = v),
+      guard('qemu', () => service.getVMs(name)).then((v) => r.vms = v),
+      guard('network', () => service.getNodeNetwork(name))
+          .then((v) => r.networks = v),
+      guard('rrddata', () => service.getNodeRRDData(name))
+          .then((v) => r.rrd = v),
+      guard('netstat', () => service.getNetstat(name))
+          .then((v) => r.netstat = v),
+    ]);
+    return r;
+  }
+
+  /// [_fetchNodeEndpoints] sonucunu yeni tur map'lerine yazar. Hata veren uç
+  /// nokta için önceki turun değeri korunur (anlık bir hata ekranda veriyi
+  /// titretmesin), hiç yoksa boş kalır; UI "veri alınamadı"yı
+  /// [nodeFetchFailures] + boş veri birleşiminden gösterir.
+  void _mergeNodeEndpoints(
+    String id,
+    _NodeEndpoints r, {
+    required Map<String, Map<String, dynamic>> statuses,
+    required Map<String, List<dynamic>> disks,
+    required Map<String, List<dynamic>> storages,
+    required Map<String, List<dynamic>> lxcs,
+    required Map<String, List<dynamic>> vms,
+    required Map<String, List<dynamic>> networks,
+    required Map<String, List<dynamic>> rrd,
+    required Map<String, List<dynamic>> netstat,
+    required Map<String, Set<String>> failures,
+  }) {
+    statuses[id] = r.status ?? nodeStatuses[id] ?? <String, dynamic>{};
+    disks[id] = r.disks ?? nodeDisks[id] ?? [];
+    storages[id] = r.storages ?? nodeStorages[id] ?? [];
+    lxcs[id] = r.lxcs ?? nodeLXCs[id] ?? [];
+    vms[id] = r.vms ?? nodeVMs[id] ?? [];
+    networks[id] = r.networks ?? nodeNetworks[id] ?? [];
+    rrd[id] = r.rrd ?? nodeRRDData[id] ?? [];
+    netstat[id] = r.netstat ?? nodeNetstat[id] ?? [];
+    failures[id] = r.failed;
   }
 
   void _applyFreshData(Map<String, dynamic> data) {
@@ -905,6 +970,8 @@ class ProxmoxProvider extends ChangeNotifier {
     nodeNetworks = data['nodeNetworks'] as Map<String, List<dynamic>>;
     nodeRRDData = data['nodeRRDData'] as Map<String, List<dynamic>>;
     nodeNetstat = data['nodeNetstat'] as Map<String, List<dynamic>>? ?? {};
+    nodeFetchFailures =
+        data['nodeFetchFailures'] as Map<String, Set<String>>? ?? {};
     nodeDiskSmarts =
         data['nodeDiskSmarts'] as Map<String, Map<String, dynamic>>;
 
