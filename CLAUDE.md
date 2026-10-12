@@ -77,6 +77,7 @@ DEBT.md                          kanonik borç listesi
 | WoL | `features/wol/wol_screen.dart` + `WolWidget*.kt` | UDP veya SSH relay. Relay eşleşmesi host/IP değişikliğine dayanıklı (`becd839`). |
 | Cloud sync | `core/services/cloud_sync_service.dart` | Firestore. Sunucu yapısı cloud'da, token'lar sadece local'de (`credential_sync.dart`). |
 | Güncelleme | `features/update/*` | Aşağıda "Uygulama içi güncelleme" bölümüne bak. |
+| Hakkında / bağlantılar | `features/dashboard/about_screen.dart`, `core/constants/links.dart` | Kullanıcıya görünen tüm adresler `MToolsLinks`'te (mtools.tr, gizlilik, contact@mtools.tr, geri bildirim API'si). Uygulamada kişisel isim ya da kişisel kullanıcı adı içeren adres **gösterilmez**; teknik GitHub adresleri yalnızca güncelleme servislerinde. Kullanım koşulları sayfası mtools.tr'de henüz yok; yayınlanınca `MToolsLinks`'e ve Hakkında → YASAL'a eklenecek. Sürüm notları satırı bu sürümün `_releaseNotes`'unu gösterir, oradan Sürüm geçmişi açılır. |
 | Widget'lar | `core/services/widget_service.dart` + Kotlin provider'lar | home_widget 0.9.x. Veri JSON anahtarları: `proxmox_nodes_json`, `ups_units_json`, `adguard_stats_json`. |
 
 ## Bildirim ve arka plan servisi akışı

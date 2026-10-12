@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/design_widgets.dart';
 import '../../widgets/mtools_loader.dart';
 import 'feedback_service.dart';
+import '../../core/constants/links.dart';
 
 /// Ayarlar → "Geri bildirim gönder". Hata ekranındaki "Bu hatayı bildir"
 /// butonu da bunu [initialType] = hata, [includeLogInitially] = true ve
@@ -101,7 +102,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         _error = 'Çok fazla deneme yapıldı, lütfen biraz sonra tekrar deneyin.';
       case FeedbackNetworkError():
         _error = 'Gönderilemedi. İnternet bağlantınızı kontrol edin ya da '
-            '$kContactEmail adresine yazın.';
+            '${MToolsLinks.contactEmail} adresine yazın.';
     }
     setState(() => _sending = false);
   }
@@ -109,7 +110,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Future<void> _sendMail() async {
     final uri = Uri(
       scheme: 'mailto',
-      path: kContactEmail,
+      path: MToolsLinks.contactEmail,
       queryParameters: {
         'subject': 'MTools Geri Bildirim',
         if (widget.initialMessage.isNotEmpty) 'body': widget.initialMessage,
@@ -122,7 +123,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       // Aşağıda panoya kopyalama ile ele alınıyor.
     }
     if (launched || !mounted) return;
-    await Clipboard.setData(const ClipboardData(text: kContactEmail));
+    await Clipboard.setData(const ClipboardData(text: MToolsLinks.contactEmail));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content:
@@ -187,7 +188,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             Icon(Icons.mail_outline_rounded, color: colors.textMuted, size: 48),
             const SizedBox(height: 16),
             Text(
-              'Geri bildirim için $kContactEmail adresine yazın.',
+              'Geri bildirim için ${MToolsLinks.contactEmail} adresine yazın.',
               textAlign: TextAlign.center,
               style: TextStyle(color: colors.textSecondary, fontSize: 14),
             ),

@@ -3,25 +3,31 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/constants/links.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/design_widgets.dart';
 import '../../core/theme/mtools_mark.dart';
 import '../../core/utils/app_transitions.dart';
 import 'error_log_screen.dart';
 import 'error_log_service.dart';
+import '../feedback/feedback_screen.dart';
+import '../update/release_history_screen.dart';
+import '../update/update_screen.dart';
+
+/// Dış bağlantıyı açan fonksiyon — varsayılan url_launcher'ın launchUrl'ü.
+/// Testler, hangi adresin açıldığını doğrulamak için kendi fonksiyonunu verir.
+typedef UrlLauncher = Future<bool> Function(Uri uri, {LaunchMode mode});
 
 class AboutScreen extends StatefulWidget {
-  const AboutScreen({super.key});
+  final UrlLauncher? urlLauncher;
+
+  const AboutScreen({super.key, this.urlLauncher});
 
   @override
   State<AboutScreen> createState() => _AboutScreenState();
 }
 
 class _AboutScreenState extends State<AboutScreen> {
-  static const _websiteUrl = 'https://mtools.tr';
-  static const _privacyUrl = 'https://mtools.tr/gizlilik/';
-  static const _sourceUrl = 'https://github.com/mertbskrt/mtools';
-  static const _releasesUrl = 'https://github.com/mertbskrt/mtools-releases';
-
   int _secretTapCount = 0;
   String _version = '';
   String _buildNumber = '';
@@ -42,8 +48,12 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
+  Future<bool> _launch(Uri uri) =>
+      (widget.urlLauncher ?? launchUrl)(uri,
+          mode: LaunchMode.externalApplication);
+
   Future<void> _sendMail() async {
-    const email = 'contact@mtools.tr';
+    const email = MToolsLinks.contactEmail;
     final subject =
         'MTools${_version.isNotEmpty ? ' v$_version' : ''} Geri Bildirim';
     final uri = Uri(
@@ -52,8 +62,7 @@ class _AboutScreenState extends State<AboutScreen> {
       query: 'subject=${Uri.encodeComponent(subject)}',
     );
     try {
-      final launched =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await _launch(uri);
       if (!launched && mounted) {
         await Clipboard.setData(const ClipboardData(text: email));
         if (mounted) {
@@ -81,35 +90,39 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
+  /// Dış tarayıcıda açar; açılamazsa (tarayıcı yok, hata) uygulama çökmez,
+  /// "Bağlantı açılamadı" gösterilir.
   Future<void> _openUrl(String url) async {
+    var launched = false;
     try {
-      final launched =
-          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (!launched && mounted) {
-        await Clipboard.setData(ClipboardData(text: url));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('Tarayıcı bulunamadı. Bağlantı kopyalandı.'),
-            backgroundColor: context.appColors.warning,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md)),
-          ));
-        }
-      }
-    } catch (e) {
-      await Clipboard.setData(ClipboardData(text: url));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Bağlantı panoya kopyalandı.'),
-          backgroundColor: context.appColors.info,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md)),
-        ));
-      }
+      launched = await _launch(Uri.parse(url));
+    } catch (_) {
+      // Aşağıda kullanıcıya bildiriliyor.
     }
+    if (launched || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Text('Bağlantı açılamadı'),
+      backgroundColor: context.appColors.warning,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md)),
+    ));
   }
+
+  void _push(Widget page) =>
+      Navigator.push(context, AppTransitions.slideFade(page));
+
+  void _showLicenses() => showLicensePage(
+        context: context,
+        applicationName: 'MTools',
+        applicationVersion:
+            _version.isNotEmpty ? 'v$_version ($_buildNumber)' : null,
+        applicationIcon: const Padding(
+          padding: EdgeInsets.all(12),
+          child: MtoolsMark(size: 48),
+        ),
+        applicationLegalese: '© 2026 MTools',
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -207,325 +220,125 @@ class _AboutScreenState extends State<AboutScreen> {
                         ),
                       ).animate().fadeIn(delay: 250.ms),
 
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
 
-                      Text(
-                        'Sunucu Yönetim ve İzleme Platformu',
-                        style: TextStyle(
-                            color: colors.textMuted, fontSize: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => _push(const UpdateScreen()),
+                        icon: const Icon(Icons.system_update_rounded, size: 16),
+                        label: const Text('Güncellemeleri denetle'),
+                        // primary (OLED paletinde açık gri) açık temada
+                        // metin için yeterli kontrast vermiyor — nötr metin
+                        // rengi ve ince kenarlık her iki temada okunur.
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colors.textPrimary,
+                          side: BorderSide(color: colors.hairline),
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.md)),
+                        ),
                       ).animate().fadeIn(delay: 320.ms),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // ── Platform bilgisi ────────────────────────────────────────
-                _SectionCard(
-                  colors: colors,
-                  delay: 380,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SectionHeader(
-                          colors: colors,
-                          icon: Icons.info_outline_rounded,
-                          title: 'Platform'),
-                      const SizedBox(height: 14),
-                      Text(
-                        'MTools, dağınık altyapı yönetim araçlarını tek bir '
-                        'mobil deneyimde birleştiren, kişisel ve kurumsal '
-                        'sunucu ortamları için tasarlanmış bir kontrol '
-                        'platformudur.',
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 13,
-                          height: 1.7,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ..._platformHighlights.map((item) => Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.only(left: 12),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                left: BorderSide(
-                                  color: colors.primary.withValues(alpha: 0.35),
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                            child: Text.rich(
-                              TextSpan(
-                                style: TextStyle(
-                                  color: colors.textSecondary,
-                                  fontSize: 12,
-                                  height: 1.5,
-                                ),
-                                children: [
-                                  TextSpan(
-                                    text: '${item.$1}: ',
-                                    style: TextStyle(
-                                      color: colors.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  TextSpan(text: item.$2),
-                                ],
-                              ),
-                            ),
-                          )),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // ── Geliştirici ─────────────────────────────────────────────
-                _SectionCard(
-                  colors: colors,
-                  delay: 460,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SectionHeader(
-                          colors: colors,
-                          icon: Icons.person_outline_rounded,
-                          title: 'Geliştirici'),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: colors.surface2,
-                            ),
-                            child: const Center(child: MtoolsMark(size: 26)),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text('Mert Başkurt',
-                                style: TextStyle(
-                                    color: colors.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      GestureDetector(
-                        onTap: _sendMail,
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: colors.primary.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                            border: Border.all(
-                                color: colors.primary.withValues(alpha: 0.15)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: colors.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                                ),
-                                child: Icon(Icons.email_outlined,
-                                    color: colors.primary, size: 16),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text('contact@mtools.tr',
-                                        style: TextStyle(
-                                            color: colors.textPrimary,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 2),
-                                    Text('Hata bildir veya öneri gönder',
-                                        style: TextStyle(
-                                            color: colors.textMuted,
-                                            fontSize: 11)),
-                                  ],
-                                ),
-                              ),
-                              Icon(Icons.arrow_forward_ios,
-                                  color: colors.textMuted, size: 12),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // ── Bağlantılar ─────────────────────────────────────────────
-                _SectionCard(
-                  colors: colors,
-                  delay: 500,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SectionHeader(
-                          colors: colors,
-                          icon: Icons.link_rounded,
-                          title: 'Bağlantılar'),
-                      const SizedBox(height: 8),
-                      _LinkRow(
-                        colors: colors,
-                        icon: Icons.language_rounded,
-                        title: 'Web sitesi',
-                        subtitle: 'mtools.tr',
-                        onTap: () => _openUrl(_websiteUrl),
-                      ),
-                      _LinkRow(
-                        colors: colors,
-                        icon: Icons.email_outlined,
-                        title: 'İletişim',
-                        subtitle: 'contact@mtools.tr',
-                        onTap: _sendMail,
-                      ),
-                      _LinkRow(
-                        colors: colors,
-                        icon: Icons.code_rounded,
-                        title: 'Kaynak kod',
-                        subtitle: 'github.com/mertbskrt/mtools',
-                        onTap: () => _openUrl(_sourceUrl),
-                      ),
-                      _LinkRow(
-                        colors: colors,
-                        icon: Icons.privacy_tip_outlined,
-                        title: 'Gizlilik politikası',
-                        subtitle: 'mtools.tr/gizlilik',
-                        onTap: () => _openUrl(_privacyUrl),
-                      ),
-                      _LinkRow(
-                        colors: colors,
-                        icon: Icons.description_outlined,
-                        title: 'Açık kaynak lisansları',
-                        subtitle: 'Kullanılan paketlerin lisansları',
-                        onTap: () => showLicensePage(
-                          context: context,
-                          applicationName: 'MTools',
-                          applicationVersion:
-                              _version.isNotEmpty ? 'v$_version' : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // ── Sürüm Notları ───────────────────────────────────────────
-                _SectionCard(
-                  colors: colors,
-                  delay: 540,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SectionHeader(
-                          colors: colors,
-                          icon: Icons.update_rounded,
-                          title: 'Sürüm Notları'),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: colors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                              border: Border.all(
-                                  color: colors.primary.withValues(alpha: 0.25)),
-                            ),
-                            child: Text(
-                                _version.isNotEmpty
-                                    ? 'v$_version'
-                                    : '',
-                                style: TextStyle(
-                                    color: colors.primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 10),
-                          Text('Ağustos 2026',
-                              style: TextStyle(
-                                  color: colors.textMuted, fontSize: 11)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      ..._releaseNotes.map((note) => Container(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.only(left: 12),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                left: BorderSide(
-                                  color: colors.primary.withValues(alpha: 0.35),
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                            child: Text(note,
-                                style: TextStyle(
-                                    color: colors.textSecondary,
-                                    fontSize: 12,
-                                    height: 1.5)),
-                          )),
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 28),
 
-                // ── Footer ──────────────────────────────────────────────────
-                Center(
+                // ── Uygulama ────────────────────────────────────────────────
+                const _GroupLabel('Uygulama'),
+                _SectionCard(
+                  colors: colors,
+                  delay: 380,
                   child: Column(
                     children: [
-                      Container(
-                        width: 40,
-                        height: 1,
-                        color: colors.textMuted.withValues(alpha: 0.2),
+                      _LinkTile(
+                        colors: colors,
+                        icon: Icons.new_releases_outlined,
+                        title: 'Sürüm notları',
+                        subtitle: _version.isNotEmpty
+                            ? 'v$_version ile gelen yenilikler'
+                            : 'Bu sürümdeki yenilikler',
+                        onTap: () => _push(_ReleaseNotesPage(
+                            version: _version, notes: _releaseNotes)),
                       ),
-                      const SizedBox(height: 12),
-                      GestureDetector(
-                        onTap: () => _openUrl(_releasesUrl),
-                        child: Text(
-                          'github.com/mertbskrt/mtools-releases',
-                          style: TextStyle(
-                            color: colors.textMuted,
-                            fontSize: 11,
-                            decoration: TextDecoration.underline,
-                            decorationColor:
-                                colors.textMuted.withValues(alpha: 0.4),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '© 2025 Mert Başkurt',
-                        style: TextStyle(
-                            color: colors.textMuted, fontSize: 11),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tüm hakları saklıdır.',
-                        style: TextStyle(
-                            color: colors.textMuted.withValues(alpha: 0.6),
-                            fontSize: 10),
+                      _LinkTile(
+                        colors: colors,
+                        icon: Icons.language_rounded,
+                        title: 'Web sitesi',
+                        subtitle: MToolsLinks.websiteLabel,
+                        external: true,
+                        onTap: () => _openUrl(MToolsLinks.website),
                       ),
                     ],
-                  ).animate().fadeIn(delay: 620.ms),
+                  ),
                 ),
+
+                const SizedBox(height: 20),
+
+                // ── Destek ──────────────────────────────────────────────────
+                const _GroupLabel('Destek'),
+                _SectionCard(
+                  colors: colors,
+                  delay: 440,
+                  child: Column(
+                    children: [
+                      _LinkTile(
+                        colors: colors,
+                        icon: Icons.feedback_outlined,
+                        title: 'Geri bildirim gönder',
+                        subtitle: 'Hata bildir, öneri ya da soru gönder',
+                        onTap: () => _push(const FeedbackScreen()),
+                      ),
+                      _LinkTile(
+                        colors: colors,
+                        icon: Icons.email_outlined,
+                        title: 'İletişim',
+                        subtitle: MToolsLinks.contactEmail,
+                        external: true,
+                        onTap: _sendMail,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ── Yasal ───────────────────────────────────────────────────
+                // Kullanım koşulları sayfası mtools.tr'de henüz yok; yayınlanınca
+                // MToolsLinks'e eklenip buraya bir satır olarak gelecek.
+                const _GroupLabel('Yasal'),
+                _SectionCard(
+                  colors: colors,
+                  delay: 500,
+                  child: Column(
+                    children: [
+                      _LinkTile(
+                        colors: colors,
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'Gizlilik politikası',
+                        subtitle: MToolsLinks.privacyLabel,
+                        external: true,
+                        onTap: () => _openUrl(MToolsLinks.privacy),
+                      ),
+                      _LinkTile(
+                        colors: colors,
+                        icon: Icons.description_outlined,
+                        title: 'Açık kaynak lisansları',
+                        subtitle: 'Kullanılan paketlerin lisansları',
+                        onTap: _showLicenses,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // ── Alt bilgi ───────────────────────────────────────────────
+                Center(
+                  child: Text(
+                    '${MToolsLinks.websiteLabel} · ${MToolsLinks.contactEmail}',
+                    style: TextStyle(color: colors.textMuted, fontSize: 11),
+                  ),
+                ).animate().fadeIn(delay: 560.ms),
               ],
             ),
           ),
@@ -534,42 +347,8 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
-  static const _platformHighlights = <(String, String)>[
-    (
-      'Merkezi İzleme',
-      'Sunucu, ağ ve güç altyapınızın durumunu tek ekrandan, gerçek '
-          'zamanlı olarak takip edin.',
-    ),
-    (
-      'Aktif Yönetim',
-      'Sistemlerinizi yalnızca gözlemlemekle kalmayın; kritik '
-          'operasyonları doğrudan uygulama üzerinden yürütün.',
-    ),
-    (
-      'Akıllı Bildirimler',
-      'Eşik bazlı, kural tabanlı bir bildirim motoruyla önemli '
-          'olaylardan anında haberdar olun; gereksiz uyarı yükünden '
-          'kaçının.',
-    ),
-    (
-      'Güvenlik Öncelikli Mimari',
-      'Kimlik bilgileriniz cihazınızdan hiçbir zaman ayrılmaz; '
-          'yapılandırmalarınız yalnızca gerektiğinde, güvenli şekilde '
-          'senkronize edilir.',
-    ),
-    (
-      'Sürekli Erişilebilirlik',
-      'Ana ekran widget\'ları ve arka plan izleme servisi sayesinde, '
-          'uygulamayı açmadan bile sistem durumunuzdan haberdar olun.',
-    ),
-    (
-      'Genişleyebilir Yapı',
-      'Platform, farklı altyapı bileşenlerini ve entegrasyonları '
-          'destekleyecek şekilde tasarlanmıştır.',
-    ),
-  ];
-
   static const _releaseNotes = [
+    'Hakkında ekranı yenilendi, gizlilik politikası ve açık kaynak lisansları eklendi',
     'Alt menüde dokunma titreşimi ve daha hızlı geçiş',
     'Bildirim motorunda 4 güvenilirlik hatası düzeltildi: UPS-çevrimdışı '
         'bildiriminin bekleme süresi ayarı yok sayılıyordu, node-çevrimdışı '
@@ -613,51 +392,135 @@ class _AboutScreenState extends State<AboutScreen> {
 // Section Card
 // ─────────────────────────────────────────────
 
-/// Hakkında → Bağlantılar kartındaki tek satır (ikon, başlık, alt metin, ok).
-class _LinkRow extends StatelessWidget {
+/// Kart içindeki tek satır: solda ikon, sağda dış bağlantılar için
+/// [Icons.open_in_new], uygulama içi sayfalar için ok.
+class _LinkTile extends StatelessWidget {
   final AppThemeData colors;
   final IconData icon;
   final String title;
   final String subtitle;
+  final bool external;
   final VoidCallback onTap;
 
-  const _LinkRow({
+  const _LinkTile({
     required this.colors,
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.external = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return ListTile(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Icon(icon, color: colors.primary, size: 18),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          color: colors.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: TextStyle(color: colors.textMuted, fontSize: 11)),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios, color: colors.textMuted, size: 12),
-          ],
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+      leading: Icon(icon, color: colors.primary, size: 20),
+      title: Text(title,
+          style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle,
+          style: TextStyle(color: colors.textMuted, fontSize: 11)),
+      trailing: Icon(
+          external ? Icons.open_in_new : Icons.chevron_right_rounded,
+          color: colors.textMuted,
+          size: external ? 16 : 20),
+    );
+  }
+}
+
+/// Kart grubunun üstündeki küçük başlık (UYGULAMA / DESTEK / YASAL).
+class _GroupLabel extends StatelessWidget {
+  final String text;
+  const _GroupLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: SectionLabel(text),
+    );
+  }
+}
+
+/// Hakkında → Sürüm notları: bu sürümün Türkçe notları (internetsiz) ve
+/// altta GitHub'daki tüm sürümler için Sürüm geçmişi ekranı.
+class _ReleaseNotesPage extends StatelessWidget {
+  final String version;
+  final List<String> notes;
+
+  const _ReleaseNotesPage({required this.version, required this.notes});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Scaffold(
+      backgroundColor: colors.bgDark,
+      appBar: AppBar(
+        backgroundColor: colors.bgDark,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new,
+              color: colors.textPrimary, size: 18),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: Text('Sürüm Notları',
+            style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.bold)),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        children: [
+          _SectionCard(
+            colors: colors,
+            delay: 0,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionHeader(
+                    colors: colors,
+                    icon: Icons.update_rounded,
+                    title: version.isNotEmpty ? 'v$version' : 'Bu sürüm'),
+                const SizedBox(height: 16),
+                ...notes.map((note) => Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.only(left: 12),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                            color: colors.primary.withValues(alpha: 0.35),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      child: Text(note,
+                          style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 12,
+                              height: 1.5)),
+                    )),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => Navigator.push(context,
+                  AppTransitions.slideFade(const ReleaseHistoryScreen())),
+              icon: const Icon(Icons.history_rounded, size: 16),
+              label: const Text('Tüm sürümler'),
+              style: TextButton.styleFrom(foregroundColor: colors.primary),
+            ),
+          ),
+        ],
       ),
     );
   }

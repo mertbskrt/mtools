@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mtools/features/dashboard/error_log_service.dart';
 import 'package:mtools/features/feedback/feedback_service.dart';
+import 'package:mtools/core/constants/links.dart';
 
 /// İsteği kaydeden ve önceden belirlenmiş yanıtı (ya da hatayı) dönen adapter.
 class _FakeAdapter implements HttpClientAdapter {
@@ -60,7 +61,7 @@ void main() {
     final (result, a) = await _send(_FakeAdapter(body: {'ok': true}));
 
     expect(result, isA<FeedbackSent>());
-    expect(a.lastRequest!.uri.toString(), kFeedbackEndpoint);
+    expect(a.lastRequest!.uri.toString(), MToolsLinks.feedbackEndpoint);
     expect(a.lastRequest!.method, 'POST');
     expect(a.lastRequest!.headers['X-MTools-App'], 'test-key');
     expect(a.lastRequest!.contentType, startsWith('application/json'));

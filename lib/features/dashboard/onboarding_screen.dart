@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../proxmox/proxmox_provider.dart';
 import '../adguard/adguard_provider.dart';
 import '../ups/nut_provider.dart';
+import '../../core/constants/links.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Onboarding verisi
@@ -157,7 +158,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Future<void> _sendEmail() async {
     final uri = Uri(
       scheme: 'mailto',
-      path: 'contact@mtools.tr',
+      path: MToolsLinks.contactEmail,
       queryParameters: {
         'subject': 'MTools Geri Bildirim',
         'body': 'Merhaba,\n\nMTools uygulaması hakkında geri bildirimim:\n\n',
@@ -442,7 +443,7 @@ class _ContactCard extends StatelessWidget {
                 color: colors.success,
               ),
               label: Text(
-                'contact@mtools.tr',
+                MToolsLinks.contactEmail,
                 style: TextStyle(
                   color: colors.success,
                   fontSize: 13,

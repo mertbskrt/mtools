@@ -7,6 +7,7 @@ All notable changes to MTools are documented in this file.
 ### New
 
 - Added haptic feedback and faster response on bottom navigation
+- Added privacy policy and open source licenses to About
 
 ## [3.3.2] — 2026-08-28
 

@@ -4,6 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../dashboard/error_log_service.dart';
+import '../../core/constants/links.dart';
 
 /// Geri bildirim API anahtarı derleme sırasında verilir:
 /// `flutter build apk --dart-define=MTOOLS_APP_KEY=...`
@@ -11,8 +12,6 @@ import '../dashboard/error_log_service.dart';
 /// e-posta seçeneğini gösterir (bkz. [FeedbackService.isConfigured]).
 const kMtoolsAppKey = String.fromEnvironment('MTOOLS_APP_KEY');
 
-const kFeedbackEndpoint = 'https://mtools.tr/api/uygulama';
-const kContactEmail = 'contact@mtools.tr';
 
 /// Geri bildirim türleri — sunucunun beklediği değerler ve ekrandaki adları.
 enum FeedbackType {
@@ -112,7 +111,7 @@ class FeedbackService {
 
     try {
       final res = await _dio.post<dynamic>(
-        kFeedbackEndpoint,
+        MToolsLinks.feedbackEndpoint,
         data: body,
         options: Options(
           contentType: Headers.jsonContentType,
@@ -145,7 +144,7 @@ class FeedbackService {
     }
     return FeedbackRejected(
         'Sunucu beklenmeyen bir yanıt verdi (${status ?? '-'}). '
-        'Lütfen daha sonra tekrar deneyin ya da $kContactEmail adresine yazın.');
+        'Lütfen daha sonra tekrar deneyin ya da ${MToolsLinks.contactEmail} adresine yazın.');
   }
 
   /// `surum`, `cihaz`, `android` alanları — ör. "3.4.0 (24)",
