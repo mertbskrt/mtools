@@ -139,8 +139,9 @@ watchdog'un arka plandan yeniden başlatabilmesi için de gerekli. **Gerçek cih
 ## Bekleyen işler (sıradaki sürüm, muhtemelen 3.4.0+24)
 
 Sıra: A (Sistem ekranı çökmesi, `f598699`, onaylandı) → B (bildirim çözümü, `9792b98` + `37eedab` +
-`1672eb7` + `d095e44`, onaylandı) →
-loader entegrasyonu → **D (iletişim ve geri bildirim)**. Her adımın sonunda kısa rapor
+`1672eb7` + `d095e44`, onaylandı) → loader entegrasyonu (`3d86f40`, onay bekliyor; yükleme
+göstergeleri artık `lib/widgets/mtools_loader.dart` → `MToolsLoader`; yeni yüklemelerde
+`CircularProgressIndicator` değil bu kullanılır) → **D (iletişim ve geri bildirim)**. Her adımın sonunda kısa rapor
 verilir, kullanıcı onaylamadan sonrakine geçilmez. Hepsi tek sürüm olarak çıkacak.
 Sürüm numarası ve notları en sonda konuşulacak.
 
