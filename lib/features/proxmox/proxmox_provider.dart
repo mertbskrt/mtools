@@ -13,6 +13,7 @@ import '../../core/services/widget_service.dart';
 import '../../core/services/node_sensor_service.dart';
 import '../../core/utils/credential_sync.dart';
 import '../../core/utils/deliberate_off_store.dart';
+import '../../core/utils/foreground_polling.dart';
 
 /// Bu turda erişilemeyen, kayıtlı bir Proxmox sunucusu — ister daha önce en
 /// az bir node'u bilinsin ister ilk bağlantısından beri hiç başarılı olmasın.
@@ -86,7 +87,7 @@ class _NodeEndpoints {
   final Set<String> failed = {};
 }
 
-class ProxmoxProvider extends ChangeNotifier {
+class ProxmoxProvider extends ChangeNotifier with ForegroundPolling {
   final List<ProxmoxService> _services = [];
   final Map<String, ProxmoxService> _nodeServiceMap = {};
 
@@ -136,13 +137,6 @@ class ProxmoxProvider extends ChangeNotifier {
   NutProvider? nutProvider;
 
   bool _refreshing = false;
-  Timer? _periodicTimer;
-  // Periyodik yenileme isteniyor mu (init/debugStartPolling sonrası true,
-  // reset() sonrası false) ve uygulama şu an arka planda mı — bkz.
-  // _startPeriodicRefresh().
-  bool _pollingWanted = false;
-  bool _inBackground = false;
-  AppLifecycleListener? _lifecycleListener;
   int _consecutiveFailCount = 0;
 
   // ── Retry state ───────────────────────────────────────────────────────────
@@ -238,8 +232,7 @@ class ProxmoxProvider extends ChangeNotifier {
   }
 
   void reset() {
-    _pollingWanted = false;
-    _periodicTimer?.cancel();
+    stopPolling();
     _retryTimer?.cancel();
     _services.clear();
     _nodeServiceMap.clear();
@@ -267,7 +260,7 @@ class ProxmoxProvider extends ChangeNotifier {
   // ── Init ──────────────────────────────────────────────────────────────────
 
   Future<void> init() async {
-    _periodicTimer?.cancel();
+    stopPolling();
     _retryTimer?.cancel();
     isReady = false;
     isInitialLoad = true;
@@ -409,38 +402,7 @@ class ProxmoxProvider extends ChangeNotifier {
 
     await prefs.setBool('app_active', true);
 
-    _startPeriodicRefresh();
-  }
-
-  void _startPeriodicRefresh() {
-    _pollingWanted = true;
-    // Ekran görünmezken canlı veri yoklamak gereksiz: arka plan servisi
-    // (background_service.dart) bildirim için gereken kontrolleri zaten
-    // kendisi yapıyor. Servis kalıcı foreground olduğundan süreç artık
-    // dondurulmuyor — bu timer arka planda da çalışmaya devam ederdi.
-    _lifecycleListener ??= AppLifecycleListener(
-      onPause: _pausePolling,
-      onResume: _resumePolling,
-    );
-    _periodicTimer?.cancel();
-    _periodicTimer = _inBackground
-        ? null
-        : Timer.periodic(const Duration(seconds: 30), (_) => refresh());
-  }
-
-  void _pausePolling() {
-    _inBackground = true;
-    _periodicTimer?.cancel();
-    _periodicTimer = null;
-  }
-
-  void _resumePolling() {
-    _inBackground = false;
-    // reset() sonrası (oturum kapatma vb.) döngü bilinçli durdurulmuşsa
-    // ön plana dönüş onu yeniden başlatmamalı.
-    if (!_pollingWanted) return;
-    refresh();
-    _startPeriodicRefresh();
+    startPolling();
   }
 
   /// Testlerde init()'in SharedPreferences/cloud adımları olmadan yenileme
@@ -448,7 +410,7 @@ class ProxmoxProvider extends ChangeNotifier {
   @visibleForTesting
   Future<void> debugStartPolling() async {
     await refresh();
-    _startPeriodicRefresh();
+    startPolling();
   }
 
   // ── Retry mekanizması ─────────────────────────────────────────────────────
@@ -564,6 +526,7 @@ class ProxmoxProvider extends ChangeNotifier {
 
   // ── Refresh ───────────────────────────────────────────────────────────────
 
+  @override
   Future<void> refresh() async {
     if (_services.isEmpty) return;
     if (_refreshing) return;
@@ -1602,9 +1565,8 @@ class ProxmoxProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _periodicTimer?.cancel();
+    disposePolling();
     _retryTimer?.cancel();
-    _lifecycleListener?.dispose();
     super.dispose();
   }
 }

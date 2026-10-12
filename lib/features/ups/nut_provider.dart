@@ -7,13 +7,13 @@ import 'nut_service.dart';
 import '../../core/services/cloud_sync_service.dart';
 import '../../core/services/widget_service.dart';
 import '../../core/utils/credential_sync.dart';
+import '../../core/utils/foreground_polling.dart';
 
 // NutServer modeli nut_service.dart içinde tanımlı — burada tekrar tanımlanmıyor.
 
-class NutProvider extends ChangeNotifier {
+class NutProvider extends ChangeNotifier with ForegroundPolling {
   // Her sunucu için ayrı service instance — config değişince yeniden oluşturulur
   final Map<String, NutService> _services = {};
-  Timer? _timer;
 
   List<NutServer> servers = [];
   Map<String, UpsData> upsDataMap = {};
@@ -29,7 +29,7 @@ class NutProvider extends ChangeNotifier {
     await _loadServers();
     if (servers.isNotEmpty) {
       await refresh();
-      _startTimer();
+      startPolling();
     }
   }
 
@@ -119,7 +119,7 @@ class NutProvider extends ChangeNotifier {
     await _saveServers();
     // isLoading guard'ı bypass etmeden doğrudan refresh et
     await _refreshServer(server);
-    _startTimer();
+    startPolling();
     notifyListeners();
   }
 
@@ -142,11 +142,7 @@ class NutProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());
-  }
-
+  @override
   Future<void> refresh() async {
     if (isLoading) return;
     isLoading = true;
@@ -233,7 +229,7 @@ class NutProvider extends ChangeNotifier {
   }
 
 void reset() {
-    _timer?.cancel();
+    stopPolling();
     servers = [];
     upsDataMap = {};
     serverConnected = {};
@@ -245,7 +241,7 @@ void reset() {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    disposePolling();
     super.dispose();
   }
 }

@@ -6,10 +6,10 @@ import 'package:home_widget/home_widget.dart';
 import 'adguard_service.dart';
 import '../../core/services/cloud_sync_service.dart';
 import '../../core/services/widget_service.dart';
+import '../../core/utils/foreground_polling.dart';
 
-class AdGuardProvider extends ChangeNotifier {
+class AdGuardProvider extends ChangeNotifier with ForegroundPolling {
   final AdGuardService _service = AdGuardService();
-  Timer? _timer;
 
   bool isConfigured = false;
   bool isLoading = false;
@@ -73,7 +73,7 @@ class AdGuardProvider extends ChangeNotifier {
     await _loadConfig();
     if (isConfigured) {
       await refresh();
-      _startTimer();
+      startPolling();
     }
   }
 
@@ -194,14 +194,10 @@ class AdGuardProvider extends ChangeNotifier {
       }),
     );
     await refresh();
-    _startTimer();
+    startPolling();
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) => refresh());
-  }
-
+  @override
   Future<void> refresh() async {
     if (!isConfigured) return;
     if (isLoading) return;
@@ -421,7 +417,7 @@ class AdGuardProvider extends ChangeNotifier {
   }
 
   void reset() {
-    _timer?.cancel();
+    stopPolling();
     isConfigured = false;
     isLoading = false;
     isConnected = false;
@@ -443,7 +439,7 @@ class AdGuardProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    disposePolling();
     super.dispose();
   }
 }
