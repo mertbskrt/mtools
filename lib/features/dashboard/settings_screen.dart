@@ -13,6 +13,7 @@ import '../notifications/notification_settings_screen.dart';
 import 'proxmox_connection_screen.dart';
 import 'about_screen.dart';
 import '../feedback/feedback_screen.dart';
+import 'test_error_screen.dart';
 import 'security_settings_screen.dart';
 import 'tab_settings_screen.dart';
 import 'auth_screen.dart';
@@ -227,6 +228,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => _push(const FeedbackScreen()),
           ),
           const SizedBox(height: 8),
+          // Yalnızca MTOOLS_TEST_ERRORS=true ile derlenen test sürümünde.
+          if (kTestErrorsEnabled) ...[
+            _SettingsCard(
+              icon: Icons.bug_report_outlined,
+              title: 'Test hatası oluştur',
+              subtitle: 'Yalnızca test derlemesi — hata ekranını dener',
+              onTap: () => _push(const TestErrorScreen()),
+            ),
+            const SizedBox(height: 8),
+          ],
           _SettingsCard(
             icon: Icons.info_outline_rounded,
             title: 'Hakkında',

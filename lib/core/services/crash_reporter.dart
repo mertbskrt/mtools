@@ -27,6 +27,7 @@ const _fileOrigins = <String, (String, String)>{
   'container_detail_page': ('CTD', 'Konteyner Detayı'),
   'create_container_screen': ('CTN', 'Yeni Konteyner'),
   'create_vm_screen': ('VMN', 'Yeni Sanal Makine'),
+  'test_error_screen': ('TST', 'Test'),
 };
 
 const _featureOrigins = <String, (String, String)>{
