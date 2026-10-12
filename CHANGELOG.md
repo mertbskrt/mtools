@@ -2,12 +2,27 @@
 
 All notable changes to MTools are documented in this file.
 
-## [3.4.0] — Unreleased
+## [3.4.0] - 2026-10-12
+
+### Fixed
+
+- Fixed a crash on the System screen when node data could not be loaded
+- Fixed one failing server request hiding all of a node's data; containers, VMs and status now load independently and missing data is shown as unavailable
+- Fixed notifications not arriving while the app is closed or the phone is locked
+- Fixed the background service not restarting after an app update
+- Fixed bottom navigation only responding to taps on the icon and label
+- Fixed missing network traffic values for containers and VMs
+- Fixed error log entries being lost after a restart
 
 ### New
 
+- Added a new MTools loading animation
 - Added haptic feedback and faster response on bottom navigation
+- Added an in-app feedback form with optional error log attachment
+- Added "Report this error" on error screens with a reference code
+- Added a battery optimization prompt to keep monitoring reliable
 - Added privacy policy and open source licenses to About
+- Updated contact address to contact@mtools.tr
 
 ## [3.3.2] — 2026-08-28
 

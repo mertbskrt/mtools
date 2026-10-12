@@ -348,43 +348,14 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   static const _releaseNotes = [
-    'Hakkında ekranı yenilendi, gizlilik politikası ve açık kaynak lisansları eklendi',
+    'Sistem ekranındaki çökme giderildi',
+    'Uygulama kapalıyken ve ekran kilitliyken bildirimler artık geliyor',
+    'Güncelleme sonrası arka plan servisi otomatik başlıyor',
     'Alt menüde dokunma titreşimi ve daha hızlı geçiş',
-    'Bildirim motorunda 4 güvenilirlik hatası düzeltildi: UPS-çevrimdışı '
-        'bildiriminin bekleme süresi ayarı yok sayılıyordu, node-çevrimdışı '
-        'bildirimleri tutarsız bekleme süresi kullanıyordu, node-tekrar-'
-        'çevrimiçi bildirimi hiç bekleme süresine uymuyordu, Terminal\'in '
-        'bağlantı hatası bildirimi geçmiş ekranıyla senkron bozulabiliyordu.',
-    'UPS widget\'ı dar alanda 2./3. birimi hiçbir iz bırakmadan '
-        'kaybediyordu — düzeltildi, artık Sistem ve Wake-on-LAN '
-        'widget\'ları gibi kendi yapılandırma ekranı da var.',
-    'AdGuard widget\'ı geniş-ama-kısa ya da dar-ama-uzun yerleşimlerde '
-        'fazladan alana rağmen en az detaylı görünüme düşüyordu; koruma '
-        'durumu metni de her zaman yeşil kalıyordu — ikisi de düzeltildi.',
-    'Wake-on-LAN cihaz düzenleme ekranı, kayıtlı relay sunucusu o an '
-        'listede yoksa sessizce başka bir sunucuyla değiştiriyordu — artık '
-        'mevcut seçim korunup uyarılı olarak gösteriliyor.',
-    'Sistem sekmesinde: özet bannerı erişilemeyen bir sunucuyu yanlışlıkla '
-        '"çevrimiçi" gösterebiliyordu, Depolama/Ağ Arayüzleri bölümleri '
-        'bazen boş görünüyordu, geçmiş grafiğindeki zaman etiketleri '
-        'gerçek örnekleme zamanı yerine sabit bir tahmine dayanıyordu.',
-    'Konteyner/VM başlat-durdur-yeniden başlat-sil işlemleri artık '
-        'Proxmox\'un görev sonucunu doğrudan sorguluyor — belirsiz '
-        '"gönderildi" mesajı yerine kesin başarı, gerçek hata metniyle '
-        'kesin başarısızlık ya da (yalnızca bağlantı koparsa) dürüst bir '
-        '"doğrulanamadı" gösteriliyor.',
-    'Konteyner/VM detay sayfası, işlem gerçekten başarısız olsa bile '
-        'hata mesajını okumadan otomatik kapanıyordu — düzeltildi.',
-    'Bir sunucunun host/IP\'si ayarlardan değiştirildiğinde Wake-on-LAN '
-        'relay eşleşmesi sessizce bozuluyordu — düzeltildi.',
-    'İki farklı Proxmox sunucusu aynı node adını raporluyorsa (ör. '
-        'ikisi de "pve") artık verileri karışmıyor, işlemler yanlış '
-        'sunucuya gitmiyor.',
-    'Yeni: Sistem Özeti bannerı artık özelleştirilebilir — şerit, '
-        'dairesel ya da kart görünümü arasında seçim yapılabiliyor, '
-        'CPU/sistem yükü verisi de eklendi.',
-    'Yeni: Depolama detay sayfasına yedekten geri yükleme desteği '
-        'eklendi — yedekleri listele, geri yükle ya da sil.',
+    'Yeni yükleme animasyonu',
+    'Uygulama içinden geri bildirim ve hata bildirimi',
+    'Hakkında ekranı yenilendi, gizlilik politikası ve açık kaynak lisansları eklendi',
+    'İletişim adresi contact@mtools.tr olarak güncellendi',
   ];
 }
 
