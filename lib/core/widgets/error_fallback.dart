@@ -9,11 +9,18 @@ import '../services/crash_reporter.dart';
 class GlobalErrorFallback extends StatelessWidget {
   final ErrorOrigin origin;
 
-  const GlobalErrorFallback({super.key, required this.origin});
+  /// "Bu hatayı bildir" butonuna basılınca çağrılır (bkz. main.dart — geri
+  /// bildirim ekranını ön doldurulmuş açar). null ise buton gösterilmez.
+  final ValueChanged<ErrorOrigin>? onReport;
 
-  factory GlobalErrorFallback.fromDetails(FlutterErrorDetails details) =>
+  const GlobalErrorFallback({super.key, required this.origin, this.onReport});
+
+  factory GlobalErrorFallback.fromDetails(FlutterErrorDetails details,
+          {ValueChanged<ErrorOrigin>? onReport}) =>
       GlobalErrorFallback(
-          origin: describeError(details.exception, details.stack));
+        origin: describeError(details.exception, details.stack),
+        onReport: onReport,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +59,23 @@ class GlobalErrorFallback extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
+          if (onReport != null) ...[
+            const SizedBox(height: 18),
+            // ErrorWidget her zaman bir Material'ın altında çizilmeyebilir;
+            // buton (InkWell) için şeffaf bir Material sağlanıyor.
+            Material(
+              type: MaterialType.transparency,
+              child: OutlinedButton.icon(
+                onPressed: () => onReport!(origin),
+                icon: const Icon(Icons.bug_report_outlined, size: 16),
+                label: const Text('Bu hatayı bildir'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 32),
           Text(
             'MTools',

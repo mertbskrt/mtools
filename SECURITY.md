@@ -27,6 +27,6 @@ document.
 
 ## Found a security issue?
 
-Please email **mertbaskurt14@gmail.com** directly instead of opening a
+Please email **contact@mtools.tr** directly instead of opening a
 GitHub issue. Include as much detail as you can (steps, affected
 version) — I'll try to respond within a reasonable time.

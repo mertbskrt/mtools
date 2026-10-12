@@ -17,6 +17,11 @@ class AboutScreen extends StatefulWidget {
 }
 
 class _AboutScreenState extends State<AboutScreen> {
+  static const _websiteUrl = 'https://mtools.tr';
+  static const _privacyUrl = 'https://mtools.tr/gizlilik/';
+  static const _sourceUrl = 'https://github.com/mertbskrt/mtools';
+  static const _releasesUrl = 'https://github.com/mertbskrt/mtools-releases';
+
   int _secretTapCount = 0;
   String _version = '';
   String _buildNumber = '';
@@ -38,7 +43,7 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Future<void> _sendMail() async {
-    const email = 'mertbaskurt14@gmail.com';
+    const email = 'contact@mtools.tr';
     final subject =
         'MTools${_version.isNotEmpty ? ' v$_version' : ''} Geri Bildirim';
     final uri = Uri(
@@ -76,13 +81,12 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
-  Future<void> _openRepo() async {
-    const url = 'https://github.com/mertbskrt/mtools-releases';
+  Future<void> _openUrl(String url) async {
     try {
       final launched =
           await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       if (!launched && mounted) {
-        await Clipboard.setData(const ClipboardData(text: url));
+        await Clipboard.setData(ClipboardData(text: url));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text('Tarayıcı bulunamadı. Bağlantı kopyalandı.'),
@@ -94,7 +98,7 @@ class _AboutScreenState extends State<AboutScreen> {
         }
       }
     } catch (e) {
-      await Clipboard.setData(const ClipboardData(text: url));
+      await Clipboard.setData(ClipboardData(text: url));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('Bağlantı panoya kopyalandı.'),
@@ -338,7 +342,7 @@ class _AboutScreenState extends State<AboutScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    Text('mertbaskurt14@gmail.com',
+                                    Text('contact@mtools.tr',
                                         style: TextStyle(
                                             color: colors.textPrimary,
                                             fontSize: 13,
@@ -355,6 +359,64 @@ class _AboutScreenState extends State<AboutScreen> {
                                   color: colors.textMuted, size: 12),
                             ],
                           ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ── Bağlantılar ─────────────────────────────────────────────
+                _SectionCard(
+                  colors: colors,
+                  delay: 500,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SectionHeader(
+                          colors: colors,
+                          icon: Icons.link_rounded,
+                          title: 'Bağlantılar'),
+                      const SizedBox(height: 8),
+                      _LinkRow(
+                        colors: colors,
+                        icon: Icons.language_rounded,
+                        title: 'Web sitesi',
+                        subtitle: 'mtools.tr',
+                        onTap: () => _openUrl(_websiteUrl),
+                      ),
+                      _LinkRow(
+                        colors: colors,
+                        icon: Icons.email_outlined,
+                        title: 'İletişim',
+                        subtitle: 'contact@mtools.tr',
+                        onTap: _sendMail,
+                      ),
+                      _LinkRow(
+                        colors: colors,
+                        icon: Icons.code_rounded,
+                        title: 'Kaynak kod',
+                        subtitle: 'github.com/mertbskrt/mtools',
+                        onTap: () => _openUrl(_sourceUrl),
+                      ),
+                      _LinkRow(
+                        colors: colors,
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'Gizlilik politikası',
+                        subtitle: 'mtools.tr/gizlilik',
+                        onTap: () => _openUrl(_privacyUrl),
+                      ),
+                      _LinkRow(
+                        colors: colors,
+                        icon: Icons.description_outlined,
+                        title: 'Açık kaynak lisansları',
+                        subtitle: 'Kullanılan paketlerin lisansları',
+                        onTap: () => showLicensePage(
+                          context: context,
+                          applicationName: 'MTools',
+                          applicationVersion:
+                              _version.isNotEmpty ? 'v$_version' : null,
                         ),
                       ),
                     ],
@@ -436,7 +498,7 @@ class _AboutScreenState extends State<AboutScreen> {
                       ),
                       const SizedBox(height: 12),
                       GestureDetector(
-                        onTap: _openRepo,
+                        onTap: () => _openUrl(_releasesUrl),
                         child: Text(
                           'github.com/mertbskrt/mtools-releases',
                           style: TextStyle(
@@ -549,6 +611,56 @@ class _AboutScreenState extends State<AboutScreen> {
 // ─────────────────────────────────────────────
 // Section Card
 // ─────────────────────────────────────────────
+
+/// Hakkında → Bağlantılar kartındaki tek satır (ikon, başlık, alt metin, ok).
+class _LinkRow extends StatelessWidget {
+  final AppThemeData colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _LinkRow({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: colors.primary, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: TextStyle(color: colors.textMuted, fontSize: 11)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: colors.textMuted, size: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _SectionCard extends StatelessWidget {
   final AppThemeData colors;

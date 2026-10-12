@@ -157,7 +157,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Future<void> _sendEmail() async {
     final uri = Uri(
       scheme: 'mailto',
-      path: 'mertbaskurt14@gmail.com',
+      path: 'contact@mtools.tr',
       queryParameters: {
         'subject': 'MTools Geri Bildirim',
         'body': 'Merhaba,\n\nMTools uygulaması hakkında geri bildirimim:\n\n',
@@ -442,7 +442,7 @@ class _ContactCard extends StatelessWidget {
                 color: colors.success,
               ),
               label: Text(
-                'mertbaskurt14@gmail.com',
+                'contact@mtools.tr',
                 style: TextStyle(
                   color: colors.success,
                   fontSize: 13,

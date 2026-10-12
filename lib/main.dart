@@ -18,8 +18,19 @@ import 'features/ups/nut_provider.dart';
 import 'core/services/connectivity_provider.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'core/services/crash_reporter.dart';
+import 'core/utils/app_navigator.dart';
+import 'features/feedback/feedback_screen.dart';
 import 'core/widgets/error_fallback.dart';
 import 'features/dashboard/error_log_service.dart';
+
+/// Hata ekranındaki "Bu hatayı bildir": geri bildirim formunu tür=hata,
+/// günlük işaretli ve ekran adı/kod yazılı açar. Kök navigator anahtarı
+/// kullanılıyor — hata ekranının kendi context'i Navigator'a ulaşamayabilir.
+void _openErrorReport(ErrorOrigin origin) {
+  appNavigatorKey.currentState?.push(
+    MaterialPageRoute(builder: (_) => FeedbackScreen.forError(origin)),
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,7 +78,8 @@ void main() async {
   // markalı, anlaşılır bir mesaj gösteriliyor — ekran adı ve kısa hata kodu
   // ile (aynı kod Hata Günlüğü'ndeki kayıtta da var).
   if (kReleaseMode) {
-    ErrorWidget.builder = GlobalErrorFallback.fromDetails;
+    ErrorWidget.builder = (details) =>
+        GlobalErrorFallback.fromDetails(details, onReport: _openErrorReport);
   }
 
   runApp(const MToolsApp());
@@ -108,6 +120,7 @@ class MToolsApp extends StatelessWidget {
               enableAutoScroll: true,
               scrollDuration: AppMotion.base,
               builder: (context) => MaterialApp(
+                navigatorKey: appNavigatorKey,
                 title: 'MTools',
                 debugShowCheckedModeBanner: false,
                 theme: themeProvider.themeData,

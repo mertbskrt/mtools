@@ -139,9 +139,14 @@ watchdog'un arka plandan yeniden başlatabilmesi için de gerekli. **Gerçek cih
 ## Bekleyen işler (sıradaki sürüm, muhtemelen 3.4.0+24)
 
 Sıra: A (Sistem ekranı çökmesi, `f598699`, onaylandı) → B (bildirim çözümü, `9792b98` + `37eedab` +
-`1672eb7` + `d095e44`, onaylandı) → loader entegrasyonu (`3d86f40`, onay bekliyor; yükleme
+`1672eb7` + `d095e44`, onaylandı) → loader entegrasyonu (`3d86f40`; yükleme
 göstergeleri artık `lib/widgets/mtools_loader.dart` → `MToolsLoader`; yeni yüklemelerde
-`CircularProgressIndicator` değil bu kullanılır) → **D (iletişim ve geri bildirim)**. Her adımın sonunda kısa rapor
+`CircularProgressIndicator` değil bu kullanılır) → **D (iletişim ve geri bildirim, yapıldı,
+onay ve cihaz testi bekliyor)**. D'nin kodu: `lib/features/feedback/` (`FeedbackService`,
+`FeedbackScreen`, `FeedbackScreen.forError`), Hakkında → Bağlantılar kartı, hata ekranındaki
+"Bu hatayı bildir" (`GlobalErrorFallback.onReport` → `main.dart` `_openErrorReport`,
+kök navigator anahtarı `core/utils/app_navigator.dart`). Eski kişisel e-posta adresi kodda ve
+SECURITY.md'de `contact@mtools.tr` ile değiştirildi. Her adımın sonunda kısa rapor
 verilir, kullanıcı onaylamadan sonrakine geçilmez. Hepsi tek sürüm olarak çıkacak.
 Sürüm numarası ve notları en sonda konuşulacak.
 
