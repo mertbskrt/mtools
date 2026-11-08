@@ -137,7 +137,7 @@ bunu reddedebiliyordu; Android 15+'ta da dataSync süre limiti doluyordu. Çöz�
 foreground, tip specialUse. Ayarlar'a pil optimizasyonu muafiyeti kartı eklendi; muafiyet
 watchdog'un arka plandan yeniden başlatabilmesi için de gerekli. **Gerçek cihazda henüz test edilmedi.**
 
-## Bekleyen işler (sıradaki sürüm, muhtemelen 3.4.0+24)
+## 3.4.0 süreci (2026-10-12'de yayınlandı)
 
 Sıra: A (Sistem ekranı çökmesi, `a235b22`, onaylandı) → B (bildirim çözümü, `ea6475e` + `f692657` +
 `aedf6c4` + `9c667d8`, onaylandı) → loader entegrasyonu (`75f1f51`; yükleme
@@ -208,7 +208,7 @@ Tek bilinçli istisna `background_service.dart:1552-1557`'deki eski tek-sunucu f
 
 ## Sürüm ve yayın süreci
 
-1. `pubspec.yaml`'da `version: x.y.z+N` güncellenir. **N her sürümde artar** (şu an `3.3.2+23`).
+1. `pubspec.yaml`'da `version: x.y.z+N` güncellenir. **N her sürümde artar** (son yayın `3.4.0+24`, 2026-10-12).
 2. "Bump" commit'i üç dosyaya dokunur (bkz. `8cb1547`, `c619297`):
    - `pubspec.yaml`
    - `CHANGELOG.md`: en üste `## [x.y.z] — YYYY-MM-DD` (em dash) bölümü
@@ -234,8 +234,11 @@ Tek bilinçli istisna `background_service.dart:1552-1557`'deki eski tek-sunucu f
   tek satır biçimi kullanılır.
 - Asset'ler: `mtools-x.y.z.apk`, `manifest.json`, `manifest.json.sig`. Tag biçimi: `vX.Y.Z`.
 
-Son 5 sürüm: v3.3.2 (2026-08-28), v3.3.1 (2026-08-19; CHANGELOG'da 08-17), v3.3.0 (2026-08-16),
-v3.2.2 (2026-08-14), v3.2.1 (2026-08-12).
+Son 5 sürüm: v3.4.0 (2026-10-12), v3.3.2 (2026-08-28), v3.3.1 (2026-08-19; CHANGELOG'da 08-17),
+v3.3.0 (2026-08-16), v3.2.2 (2026-08-14).
+
+3.4.0'dan itibaren CHANGELOG başlığı `## [x.y.z] - YYYY-MM-DD` biçiminde; yeni bölümlerde uzun (—)
+ya da çift (--) tire kullanılmaz. Eski bölümler değiştirilmedi.
 
 ### Uygulama içi güncelleme
 
